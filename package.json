@@ -1,6 +1,6 @@
 {
   "name": "@mcp-z/oauth-microsoft",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "OAuth 2.0 client for Microsoft Graph with multi-account support, PKCE security, and swappable storage backends",
   "keywords": [
     "oauth2",
