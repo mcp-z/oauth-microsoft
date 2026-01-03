@@ -152,9 +152,10 @@ export function parseConfig(args: string[], env: Record<string, string | undefin
   }
 
   // Parse headless mode
-  const cliHeadless = typeof values.headless === 'boolean' ? values.headless : undefined;
+  if (typeof values.headless === 'string') throw new Error('Use --headless or --no-headless (do not pass a value)');
+  const cliHeadless = values['no-headless'] ? false : values.headless === true ? true : undefined;
   const envHeadless = env.HEADLESS === 'true' ? true : env.HEADLESS === 'false' ? false : undefined;
-  const headless = cliHeadless ?? envHeadless ?? redirectUri !== undefined; // default for redirectUri is headless (assume server http deployment); otherwise assume local and non-headless
+  const headless = cliHeadless ?? envHeadless ?? redirectUri !== undefined;
 
   // Parse tenant-id (CLI overrides environment)
   const cliTenantId = typeof values['tenant-id'] === 'string' ? values['tenant-id'] : undefined;
