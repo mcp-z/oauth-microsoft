@@ -11,7 +11,7 @@ export type AuthRequiredBranch = z.infer<typeof AuthRequiredBranchSchema>;
 export const AuthRequiredSchema = z
   .object({
     type: z.literal('auth_required'),
-    provider: z.string().describe('OAuth provider name (e.g., "google")'),
+    provider: z.string().describe('OAuth provider name (e.g., "microsoft")'),
     message: z.string().describe('Human-readable message explaining why auth is needed'),
     url: z.string().url().describe('Authentication URL to open in browser'),
     flow: z.string().optional().describe('Authentication flow type (e.g., "auth_url", "device_code")'),

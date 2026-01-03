@@ -138,7 +138,7 @@ async function setupToken(): Promise<void> {
     console.log('');
   } else {
     // Check for existing DCR tokens
-    let existingDcrToken = await loadDcrTokens('microsoft');
+    let existingDcrToken = await loadDcrTokens();
 
     // Try to refresh if token exists but is expired
     if (existingDcrToken && existingDcrToken.providerExpiresAt <= Date.now()) {
