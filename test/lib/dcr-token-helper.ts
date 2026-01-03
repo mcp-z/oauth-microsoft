@@ -23,10 +23,11 @@ interface DcrTokenData {
 /**
  * Load stored DCR tokens from .tokens/dcr.json
  *
- * @param provider - Provider name ('google' or 'microsoft')
+ * @param provider - Provider name ('microsoft')
  * @returns DCR token data or undefined if not found
  */
-export async function loadDcrTokens(provider: 'google' | 'microsoft'): Promise<DcrTokenData | undefined> {
+export async function loadDcrTokens(): Promise<DcrTokenData | undefined> {
+  const provider = 'microsoft';
   try {
     const dcrTokenPath = path.join(process.cwd(), '.tokens/dcr.json');
     const dcrStore = new Keyv({
@@ -73,7 +74,7 @@ export async function preRegisterTestClient(store: Keyv, clientId: string, clien
  *
  * @param store - DCR server's Keyv store
  * @param dcrAccessToken - Test DCR access token to use as key
- * @param providerTokens - Provider tokens (Google/Microsoft)
+ * @param providerTokens - Provider tokens (Microsoft)
  */
 export async function injectProviderTokens(store: Keyv, dcrAccessToken: string, providerTokens: ProviderTokens): Promise<void> {
   // Store provider tokens mapped to DCR access token

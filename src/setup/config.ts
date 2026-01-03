@@ -143,11 +143,6 @@ export function parseConfig(args: string[], env: Record<string, string | undefin
     throw new Error('DCR authentication mode requires HTTP transport. DCR is not supported with stdio transport.');
   }
 
-  // Parse headless mode
-  const cliHeadless = typeof values.headless === 'boolean' ? values.headless : undefined;
-  const envHeadless = env.HEADLESS === 'true' ? true : env.HEADLESS === 'false' ? false : undefined;
-  const headless = cliHeadless ?? envHeadless ?? false;
-
   // Parse redirect-uri (CLI overrides ENV)
   const cliRedirectUri = typeof values['redirect-uri'] === 'string' ? values['redirect-uri'] : undefined;
   const envRedirectUri = env.REDIRECT_URI;
@@ -155,6 +150,11 @@ export function parseConfig(args: string[], env: Record<string, string | undefin
   if (redirectUri && transport === 'stdio') {
     throw new Error('REDIRECT_URI requires HTTP transport. The OAuth callback must be served over HTTP.');
   }
+
+  // Parse headless mode
+  const cliHeadless = typeof values.headless === 'boolean' ? values.headless : undefined;
+  const envHeadless = env.HEADLESS === 'true' ? true : env.HEADLESS === 'false' ? false : undefined;
+  const headless = cliHeadless ?? envHeadless ?? redirectUri !== undefined; // default for redirectUri is headless (assume server http deployment); otherwise assume local and non-headless
 
   // Parse tenant-id (CLI overrides environment)
   const cliTenantId = typeof values['tenant-id'] === 'string' ? values['tenant-id'] : undefined;
