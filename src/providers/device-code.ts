@@ -120,7 +120,7 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: clientId,
-        scope: scope,
+        scope,
       }),
     });
 
@@ -258,7 +258,7 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
         grant_type: 'refresh_token',
         client_id: clientId,
         refresh_token: refreshToken,
-        scope: scope,
+        scope,
       }),
     });
 

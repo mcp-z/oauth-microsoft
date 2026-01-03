@@ -15,11 +15,12 @@
  * 7. Close ephemeral server
  */
 
-import { addAccount, generatePKCE, getActiveAccount, getErrorTemplate, getSuccessTemplate, getToken, listAccountIds, type OAuth2TokenStorageProvider, setAccountInfo, setActiveAccount, setToken } from '@mcp-z/oauth';
+import { addAccount, generatePKCE, getActiveAccount, getErrorTemplate, getSuccessTemplate, getToken, type OAuth2TokenStorageProvider, setAccountInfo, setActiveAccount, setToken } from '@mcp-z/oauth';
+import { randomUUID } from 'crypto';
 import * as http from 'http';
 import open from 'open';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
-import { type AuthContext, type AuthFlowDescriptor, AuthRequiredError, type CachedToken, type EnrichedExtra, type LoopbackOAuthConfig } from '../types.ts';
+import { type AuthContext, AuthRequiredError, type CachedToken, type EnrichedExtra, type LoopbackOAuthConfig } from '../types.ts';
 
 interface TokenResponse {
   access_token: string;
@@ -86,73 +87,46 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       }
     }
 
-    // No valid token or no account - check if we can start OAuth flow
-    const { headless } = this.config;
-    if (headless) {
-      // In headless mode (production), cannot start OAuth flow
-      // Throw AuthRequiredError with auth_url descriptor for MCP tool response
-      const { clientId, tenantId, scope } = this.config;
+    const { clientId, tenantId, scope, redirectUri } = this.config;
 
-      // Incremental OAuth detection: Check if other accounts exist
-      const existingAccounts = await this.getExistingAccounts();
-      const hasOtherAccounts = effectiveAccountId ? existingAccounts.length > 0 && !existingAccounts.includes(effectiveAccountId) : existingAccounts.length > 0;
+    if (redirectUri) {
+      // Persistent callback mode (cloud deployment with configured redirect_uri)
+      const { verifier: codeVerifier, challenge: codeChallenge } = generatePKCE();
+      const stateId = randomUUID();
 
-      // Build informational OAuth URL for headless mode
-      // Note: No redirect_uri included - user must use account-add tool which starts proper ephemeral server
+      // Store PKCE verifier for callback (5 minute TTL)
+      await tokenStore.set(`${service}:pending:${stateId}`, { codeVerifier, createdAt: Date.now() }, 5 * 60 * 1000);
+
+      // Build auth URL with configured redirect_uri
       const authUrl = new URL(`https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/authorize`);
       authUrl.searchParams.set('client_id', clientId);
+      authUrl.searchParams.set('redirect_uri', redirectUri);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', scope);
       authUrl.searchParams.set('response_mode', 'query');
+      authUrl.searchParams.set('code_challenge', codeChallenge);
+      authUrl.searchParams.set('code_challenge_method', 'S256');
+      authUrl.searchParams.set('state', stateId);
       authUrl.searchParams.set('prompt', 'select_account');
 
-      // Provide context-aware hint based on existing accounts
-      let hint: string;
-      if (hasOtherAccounts) {
-        hint = `Existing ${service} accounts found. Use account-list to view, account-switch to change account, or account-add to add new account`;
-      } else if (effectiveAccountId) {
-        hint = `Use account-add to authenticate ${effectiveAccountId}`;
-      } else {
-        hint = 'Use account-add to authenticate interactively';
-      }
-
-      const baseDescriptor = {
-        kind: 'auth_url' as const,
-        provider: 'microsoft',
+      logger.info('OAuth required - persistent callback mode', { service, redirectUri });
+      throw new AuthRequiredError({
+        kind: 'auth_url',
+        provider: service,
         url: authUrl.toString(),
-        hint,
-      };
-
-      const descriptor: AuthFlowDescriptor & { accountId?: string } = effectiveAccountId ? { ...baseDescriptor, accountId: effectiveAccountId } : baseDescriptor;
-
-      throw new AuthRequiredError(descriptor);
+      });
     }
 
-    // Interactive mode - start ephemeral OAuth flow
-    logger.info('Starting ephemeral OAuth flow', { service, headless });
+    // Ephemeral callback mode (local development)
+    logger.info('Starting ephemeral OAuth flow', { service, headless: this.config.headless });
     const { token, email } = await this.performEphemeralOAuthFlow();
 
-    // Store token with email as accountId
     await setToken(tokenStore, { accountId: email, service }, token);
-
-    // Register account in account management system
     await addAccount(tokenStore, { service, accountId: email });
-
-    // Set as active account so subsequent getAccessToken() calls find it
     await setActiveAccount(tokenStore, { service, accountId: email });
-
-    // Store account metadata (email, added timestamp)
-    await setAccountInfo(
-      tokenStore,
-      { service, accountId: email },
-      {
-        email,
-        addedAt: new Date().toISOString(),
-      }
-    );
+    await setAccountInfo(tokenStore, { service, accountId: email }, { email, addedAt: new Date().toISOString() });
 
     logger.info('OAuth flow completed', { service, accountId: email });
-
     return token.accessToken;
   }
 
@@ -169,48 +143,6 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
     return {
       getAccessToken: getToken,
     };
-  }
-
-  /**
-   * Authenticate new account with OAuth flow
-   * Triggers account selection, stores token, registers account
-   *
-   * @returns Email address of newly authenticated account
-   * @throws Error in headless mode (cannot open browser for OAuth)
-   */
-  async authenticateNewAccount(): Promise<string> {
-    const { logger, headless, service, tokenStore } = this.config;
-
-    if (headless) {
-      throw new Error('Cannot authenticate new account in headless mode - interactive OAuth required');
-    }
-
-    logger.info('Starting new account authentication', { service });
-
-    // Trigger OAuth with account selection
-    const { token, email } = await this.performEphemeralOAuthFlow();
-
-    // Store token
-    await setToken(tokenStore, { accountId: email, service }, token);
-
-    // Register account
-    await addAccount(tokenStore, { service, accountId: email });
-
-    // Set as active account
-    await setActiveAccount(tokenStore, { service, accountId: email });
-
-    // Store account metadata
-    await setAccountInfo(
-      tokenStore,
-      { service, accountId: email },
-      {
-        email,
-        addedAt: new Date().toISOString(),
-      }
-    );
-
-    logger.info('New account authenticated', { service, email });
-    return email;
   }
 
   /**
@@ -237,18 +169,6 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
     const userInfo = (await response.json()) as { mail?: string; userPrincipalName: string };
     return userInfo.mail ?? userInfo.userPrincipalName;
-  }
-
-  /**
-   * Check for existing accounts in token storage (incremental OAuth detection)
-   *
-   * Uses key-utils helper for forward compatibility with key format changes.
-   *
-   * @returns Array of account IDs that have tokens for this service
-   */
-  private async getExistingAccounts(): Promise<string[]> {
-    const { service, tokenStore } = this.config;
-    return listAccountIds(tokenStore, service);
   }
 
   private isTokenValid(token: CachedToken): boolean {
@@ -287,29 +207,33 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
   private async performEphemeralOAuthFlow(): Promise<{ token: CachedToken; email: string }> {
     const { clientId, tenantId, scope, headless, logger, redirectUri: configRedirectUri } = this.config;
 
-    // Parse redirectUri if provided to extract host, protocol, port, and path
-    let targetHost = 'localhost'; // Default: localhost (Microsoft requires exact match with registered redirect URI)
-    let targetPort = 0; // Default: OS-assigned ephemeral port
-    let targetProtocol = 'http:'; // Default: http
+    // Server listen configuration (where ephemeral server binds)
+    let listenHost = 'localhost'; // Default: localhost for ephemeral loopback
+    let listenPort = 0; // Default: OS-assigned ephemeral port
+
+    // Redirect URI configuration (what goes in auth URL and token exchange)
     let callbackPath = '/callback'; // Default callback path
     let useConfiguredUri = false;
 
     if (configRedirectUri) {
       try {
         const parsed = new URL(configRedirectUri);
+        const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
 
-        // Use configured redirect URI as-is for production deployments
-        targetHost = parsed.hostname;
-        targetProtocol = parsed.protocol;
-
-        // Extract port from URL (use default ports if not specified)
-        if (parsed.port) {
-          targetPort = Number.parseInt(parsed.port, 10);
+        if (isLoopback) {
+          // Local development: Listen on specific loopback address/port
+          listenHost = parsed.hostname;
+          listenPort = parsed.port ? Number.parseInt(parsed.port, 10) : 0;
         } else {
-          targetPort = parsed.protocol === 'https:' ? 443 : 80;
+          // Cloud deployment: Listen on 0.0.0.0 with PORT from environment
+          // The redirectUri is the PUBLIC URL (e.g., https://example.com/oauth/callback)
+          // The server listens on 0.0.0.0:PORT and the load balancer routes to it
+          listenHost = '0.0.0.0';
+          const envPort = process.env.PORT ? Number.parseInt(process.env.PORT, 10) : undefined;
+          listenPort = envPort && Number.isFinite(envPort) ? envPort : 8080;
         }
 
-        // Extract path (default to /callback if URL has no path or just '/')
+        // Extract callback path from URL
         if (parsed.pathname && parsed.pathname !== '/') {
           callbackPath = parsed.pathname;
         }
@@ -317,18 +241,18 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         useConfiguredUri = true;
 
         logger.debug('Using configured redirect URI', {
-          host: targetHost,
-          protocol: targetProtocol,
-          port: targetPort,
-          path: callbackPath,
+          listenHost,
+          listenPort,
+          callbackPath,
           redirectUri: configRedirectUri,
+          isLoopback,
         });
       } catch (error) {
         logger.warn('Failed to parse redirectUri, using ephemeral defaults', {
           redirectUri: configRedirectUri,
           error: error instanceof Error ? error.message : String(error),
         });
-        // Continue with defaults (127.0.0.1, port 0, http, /callback)
+        // Continue with defaults (localhost, port 0, http, /callback)
       }
     }
 
@@ -403,8 +327,11 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         }
       });
 
-      // Listen on targetPort (0 for OS assignment, or custom port from redirectUri)
-      server.listen(targetPort, targetHost, () => {
+      // Listen on configured host/port
+      // - For loopback (default): localhost with OS-assigned port
+      // - For configured loopback: specific localhost port from redirectUri
+      // - For cloud deployment: 0.0.0.0:${PORT} from environment
+      server.listen(listenPort, listenHost, () => {
         const address = server?.address();
         if (!address || typeof address === 'string') {
           server?.close();
@@ -416,11 +343,11 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
         // Construct final redirect URI
         if (useConfiguredUri && configRedirectUri) {
-          // Use configured redirect URI as-is for production
+          // Use configured redirect URI as-is (public URL for cloud, or specific local URL)
           finalRedirectUri = configRedirectUri;
         } else {
-          // Construct ephemeral redirect URI with actual server port
-          finalRedirectUri = `${targetProtocol}//${targetHost}:${serverPort}${callbackPath}`;
+          // Construct ephemeral redirect URI with actual server port (default local behavior)
+          finalRedirectUri = `http://localhost:${serverPort}${callbackPath}`;
         }
 
         // Build Microsoft auth URL
@@ -540,6 +467,80 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       ...(tokenResponse.expires_in !== undefined && { expiresAt: Date.now() + tokenResponse.expires_in * 1000 }),
       ...(tokenResponse.scope !== undefined && { scope: tokenResponse.scope }),
     };
+  }
+
+  /**
+   * Handle OAuth callback from persistent endpoint.
+   * Used by HTTP servers with configured redirectUri.
+   *
+   * @param params - OAuth callback parameters
+   * @returns Email and cached token
+   */
+  async handleOAuthCallback(params: { code: string; state?: string }): Promise<{ email: string; token: CachedToken }> {
+    const { code, state } = params;
+    const { logger, service, tokenStore, redirectUri } = this.config;
+
+    if (!state) {
+      throw new Error('Missing state parameter in OAuth callback');
+    }
+
+    if (!redirectUri) {
+      throw new Error('handleOAuthCallback requires configured redirectUri');
+    }
+
+    // Load pending auth (includes PKCE verifier)
+    const pendingKey = `${service}:pending:${state}`;
+    const pendingAuth = await tokenStore.get<{ codeVerifier: string; createdAt: number }>(pendingKey);
+
+    if (!pendingAuth) {
+      throw new Error('Invalid or expired OAuth state. Please try again.');
+    }
+
+    // Check TTL (5 minutes)
+    if (Date.now() - pendingAuth.createdAt > 5 * 60 * 1000) {
+      await tokenStore.delete(pendingKey);
+      throw new Error('OAuth state expired. Please try again.');
+    }
+
+    logger.info('Processing OAuth callback', { service, state });
+
+    // Exchange code for token
+    const tokenResponse = await this.exchangeCodeForToken(code, pendingAuth.codeVerifier, redirectUri);
+
+    // Create cached token
+    const cachedToken: CachedToken = {
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token,
+      expiresAt: tokenResponse.expires_in ? Date.now() + tokenResponse.expires_in * 1000 : undefined,
+      ...(tokenResponse.scope !== undefined && { scope: tokenResponse.scope }),
+    };
+
+    // Fetch user email
+    const email = await this.fetchUserEmailFromToken(tokenResponse.access_token);
+
+    // Store token
+    await setToken(tokenStore, { accountId: email, service }, cachedToken);
+
+    // Add account and set as active
+    await addAccount(tokenStore, { service, accountId: email });
+    await setActiveAccount(tokenStore, { service, accountId: email });
+
+    // Store account metadata
+    await setAccountInfo(
+      tokenStore,
+      { service, accountId: email },
+      {
+        email,
+        addedAt: new Date().toISOString(),
+      }
+    );
+
+    // Clean up pending auth
+    await tokenStore.delete(pendingKey);
+
+    logger.info('OAuth callback completed', { service, email });
+
+    return { email, token: cachedToken };
   }
 
   /**

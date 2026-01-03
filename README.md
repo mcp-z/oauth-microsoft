@@ -23,8 +23,16 @@ npm install @mcp-z/oauth-microsoft keyv
 3. Click New registration.
 4. Choose a name and select a supported account type.
 5. Copy the Application (client) ID and Directory (tenant) ID.
+6. Select your MCP transport (stdio for local and http for remote) and platform
+- For stdio, choose "Authentication", + Add Redirect URI, "Mobile and desktop applications" platform 
+- For http, choose "Authentication", + Add Redirect URI, "Web" platform, add your URL (default is http://localhost:3000/oauth/callback based on the --port or PORT)
+- For local hosting, add "http://localhost" for [Ephemeral redirect URL](https://en.wikipedia.org/wiki/Ephemeral_port)
 
 ## OAuth modes
+
+### Redirect URI modes (loopback)
+- No REDIRECT_URI: ephemeral loopback (random port), works for stdio and http.
+- REDIRECT_URI set: persistent callback /oauth/callback (HTTP only).
 
 ### Loopback OAuth (interactive)
 

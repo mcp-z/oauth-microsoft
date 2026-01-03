@@ -7,22 +7,12 @@
 import '../lib/env-loader.ts';
 import { createServerRegistry } from '@mcp-z/client';
 import assert from 'assert';
+import { MS_SCOPE } from '../constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 import { logger } from '../lib/test-utils.ts';
 
 // Check if manual mode is enabled (for OAuth flow tests only)
 const MANUAL_MODE = process.env.TEST_INCLUDE_MANUAL === 'true';
-
-// Read scope from environment variable (set in .env.test)
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} environment variable is required. Check .env.test`);
-  }
-  return value;
-}
-
-const MS_SCOPE = requireEnv('MS_SCOPE');
 
 describe('DCR Integration Test (Microsoft)', () => {
   it('should validate Microsoft DCR auth using registry.connect()', async function () {

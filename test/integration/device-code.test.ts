@@ -17,13 +17,11 @@ import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import { DeviceCodeProvider } from '../../src/index.ts';
+import { MS_SCOPE } from '../constants.ts';
 import { createConfig } from '../lib/config.ts';
 import { logger } from '../lib/test-utils.ts';
 
 const config = createConfig();
-
-// Test scope for Microsoft Graph API
-const MS_SCOPE = 'openid profile email offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read';
 
 describe('Device Code Single-User Context Integration (Microsoft OAuth)', () => {
   let authProvider: DeviceCodeProvider;

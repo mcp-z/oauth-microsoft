@@ -20,12 +20,11 @@ import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import { LoopbackOAuthProvider } from '../../src/index.ts';
+import { MS_SCOPE } from '../constants.ts';
 import { createConfig } from '../lib/config.ts';
 import { logger } from '../lib/test-utils.ts';
 
 const config = createConfig();
-
-const MS_SCOPE = 'User.Read Mail.ReadWrite Files.ReadWrite';
 
 // Use isolated test token directory
 // Run `npm run test:setup` first to generate tokens
