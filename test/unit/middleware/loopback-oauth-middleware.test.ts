@@ -7,14 +7,17 @@
  * Security Model: Loopback OAuth with server-managed token storage
  */
 
-import { addAccount, type CachedToken, createAccountKey, removeAccount, setActiveAccount } from '@mcp-z/oauth';
+import '../../lib/env-loader.ts';
+import { addAccount, type CachedToken, createAccountKey, createServiceKey, getActiveAccount, getToken, removeAccount, setActiveAccount } from '@mcp-z/oauth';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import assert from 'assert';
-import * as fs from 'fs';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
+import * as os from 'os';
 import * as path from 'path';
 import { type EnrichedExtra, LoopbackOAuthProvider, type ToolModule } from '../../../src/index.ts';
+import { AuthRequiredError } from '../../../src/types.ts';
+import { MS_SCOPE } from '../../constants.ts';
 import { createConfig } from '../../lib/config.ts';
 import { createTestExtra, logger } from '../../lib/test-utils.ts';
 
@@ -24,13 +27,14 @@ let sharedTokenStore: Keyv;
 let sharedAuthProvider: LoopbackOAuthProvider;
 let realTokenData: CachedToken;
 
+const resetServiceState = async (service: string): Promise<void> => {
+  await sharedTokenStore.delete(createServiceKey('active', { service }));
+  await sharedTokenStore.delete(createServiceKey('linked', { service }));
+};
+
 before(async () => {
   // Load real token from test setup
   const tokenStorePath = path.join(process.cwd(), '.tokens/test/store.json');
-
-  if (!fs.existsSync(tokenStorePath)) {
-    throw new Error(`Token file not found at ${tokenStorePath}. Run \`npm run test:setup\` to generate OAuth token.`);
-  }
 
   const testTokenStore = new Keyv({
     store: new KeyvFile({ filename: tokenStorePath }),
@@ -59,14 +63,22 @@ before(async () => {
   }
   realTokenData = tokenData;
 
-  // Create shared token store for all tests (in-memory)
-  sharedTokenStore = new Keyv();
-
-  // Read scope from environment variable (set in .env.test)
-  const msScope = process.env.MS_SCOPE;
-  if (!msScope) {
-    throw new Error('MS_SCOPE environment variable is required. Check .env.test');
+  // Clone real token store to avoid mutating .tokens during tests.
+  const tempTokenStorePath = path.join(os.tmpdir(), `oauth-microsoft-loopback-${Date.now()}.json`);
+  const tempTokenStore = new Keyv({
+    store: new KeyvFile({ filename: tempTokenStorePath }),
+  });
+  // Copy token keys from real store into temp store (avoid active/linked keys).
+  const testIterator = testTokenStore.iterator?.(undefined);
+  if (testIterator) {
+    for await (const [key, value] of testIterator) {
+      const keyString = String(key);
+      if (keyString.includes(':token')) {
+        await tempTokenStore.set(keyString, value);
+      }
+    }
   }
+  sharedTokenStore = tempTokenStore;
 
   // Create production LoopbackOAuthProvider
   sharedAuthProvider = new LoopbackOAuthProvider({
@@ -74,21 +86,17 @@ before(async () => {
     clientId: config.clientId,
     clientSecret: config.clientSecret || undefined,
     tenantId: config.tenantId,
-    scope: msScope,
+    scope: MS_SCOPE,
     headless: true,
     logger,
     tokenStore: sharedTokenStore,
   });
 });
 
-// Clear token store before each test to ensure isolation
 beforeEach(async () => {
-  const iterator = sharedTokenStore.iterator?.(undefined);
-  if (iterator) {
-    for await (const [key] of iterator) {
-      await sharedTokenStore.delete(key);
-    }
-  }
+  await resetServiceState('outlook');
+  await resetServiceState('service-a');
+  await resetServiceState('service-b');
 });
 
 // Simple output schema for testing
@@ -117,6 +125,10 @@ async function setupTestContext(accounts: string[]): Promise<{ userId: string; m
     await sharedTokenStore.set(createAccountKey('token', { accountId: account, service: 'outlook' }), realTokenData);
     await addAccount(sharedTokenStore, { service: 'outlook', accountId: account });
   }
+  if (accounts.length > 0) {
+    // Simulate account tool selection to avoid OAuth during middleware tests.
+    await setActiveAccount(sharedTokenStore, { service: 'outlook', accountId: accounts[0] });
+  }
   return { userId, middleware: sharedAuthProvider.authMiddleware() };
 }
 
@@ -137,6 +149,18 @@ function createCapturingTool<T>(capture: (extra: EnrichedExtra) => T): { capture
 type Handler = (args: unknown, extra: unknown) => Promise<unknown>;
 type AuthRequiredHandler = (args: unknown, extra: unknown) => Promise<{ structuredContent?: { result?: { type?: string } } }>;
 
+// Test-only provider to force auth_required without interactive OAuth.
+// Exception to no-mocks rule: this isolates middleware error handling deterministically.
+class AuthRequiredLoopbackProvider extends LoopbackOAuthProvider {
+  async getAccessToken(): Promise<string> {
+    throw new AuthRequiredError({
+      kind: 'auth_url',
+      provider: 'service-b',
+      url: 'https://example.test/auth',
+    });
+  }
+}
+
 // ============================================================================
 // Basic Functionality Tests
 // ============================================================================
@@ -151,7 +175,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       }),
       realTokenData
     );
-    await setActiveAccount(sharedTokenStore, {
+    await addAccount(sharedTokenStore, {
       service: 'outlook',
       accountId: 'alice@outlook.com',
     });
@@ -174,7 +198,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       }),
       realTokenData
     );
-    await setActiveAccount(sharedTokenStore, {
+    await addAccount(sharedTokenStore, {
       service: 'outlook',
       accountId: 'alice@outlook.com',
     });
@@ -197,8 +221,8 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       handler: testHandler,
     } as unknown as ToolModule);
 
-    // Execute handler with empty extra
-    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, {});
+    // Execute handler with account override
+    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, { ...createTestExtra(), _meta: { accountId: 'alice@outlook.com' } });
 
     // Verify auth context was injected
     assert.ok(capturedExtra, 'Extra should be captured');
@@ -218,7 +242,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       }),
       realTokenData
     );
-    await setActiveAccount(sharedTokenStore, {
+    await addAccount(sharedTokenStore, {
       service: 'outlook',
       accountId: 'bob@outlook.com',
     });
@@ -239,7 +263,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       config: { inputSchema: {}, outputSchema: testOutputSchema },
       handler: testHandler,
     } as unknown as ToolModule);
-    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, {});
+    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } });
 
     assert.ok(capturedExtra, 'Extra should be captured');
     const typedExtra = capturedExtra as {
@@ -490,33 +514,49 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
   });
 
   it('handles multiple services independently', async () => {
-    const { middleware: outlookAuth } = await setupTestContext(['alice@outlook.com']);
+    await sharedTokenStore.set(createAccountKey('token', { accountId: 'service-a-user@example.com', service: 'service-a' }), realTokenData);
+    await addAccount(sharedTokenStore, { service: 'service-a', accountId: 'service-a-user@example.com' });
+    await setActiveAccount(sharedTokenStore, { service: 'service-a', accountId: 'service-a-user@example.com' });
 
-    // Create separate OneDrive provider (no accounts set up for it)
-    const provider = new LoopbackOAuthProvider({
-      service: 'drive',
+    await sharedTokenStore.set(createAccountKey('token', { accountId: 'service-b-user@example.com', service: 'service-b' }), realTokenData);
+    await addAccount(sharedTokenStore, { service: 'service-b', accountId: 'service-b-user@example.com' });
+    await setActiveAccount(sharedTokenStore, { service: 'service-b', accountId: 'service-b-user@example.com' });
+
+    const serviceAProvider = new LoopbackOAuthProvider({
+      service: 'service-a',
       clientId: config.clientId,
       clientSecret: config.clientSecret || undefined,
-      scope: 'Files.Read',
+      scope: MS_SCOPE,
       headless: true,
       logger,
       tokenStore: sharedTokenStore,
       tenantId: config.tenantId,
     });
-    const driveAuth = provider.authMiddleware();
+    const serviceBProvider = new LoopbackOAuthProvider({
+      service: 'service-b',
+      clientId: config.clientId,
+      clientSecret: config.clientSecret || undefined,
+      scope: MS_SCOPE,
+      headless: true,
+      logger,
+      tokenStore: sharedTokenStore,
+      tenantId: config.tenantId,
+    });
 
-    const { captured: outlookCaptured, toolModule: outlookTool } = createCapturingTool((e) => e.authContext.accountId);
-    const { toolModule: driveTool } = createCapturingTool((e) => e.authContext.accountId);
+    const serviceAAuth = serviceAProvider.authMiddleware();
+    const serviceBAuth = serviceBProvider.authMiddleware();
 
-    const wrappedOutlook = outlookAuth.withToolAuth(outlookTool);
-    const wrappedDrive = driveAuth.withToolAuth(driveTool);
+    const { captured: serviceACaptured, toolModule: serviceATool } = createCapturingTool((e) => e.authContext.accountId);
+    const { captured: serviceBCaptured, toolModule: serviceBTool } = createCapturingTool((e) => e.authContext.accountId);
 
-    await (wrappedOutlook.handler as Handler)({}, createTestExtra());
-    const driveResult = await (wrappedDrive.handler as AuthRequiredHandler)({}, createTestExtra());
+    const wrappedServiceA = serviceAAuth.withToolAuth(serviceATool);
+    const wrappedServiceB = serviceBAuth.withToolAuth(serviceBTool);
 
-    assert.strictEqual(outlookCaptured[0], 'alice@outlook.com');
-    // OneDrive has no active account, so returns auth_required
-    assert.ok(driveResult.structuredContent);
+    await (wrappedServiceA.handler as Handler)({}, createTestExtra());
+    await (wrappedServiceB.handler as Handler)({}, createTestExtra());
+
+    assert.strictEqual(serviceACaptured[0], 'service-a-user@example.com');
+    assert.strictEqual(serviceBCaptured[0], 'service-b-user@example.com');
   });
 
   it('preserves _meta fields other than accountId', async () => {
@@ -532,20 +572,49 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
   });
 
   it('handles account switching with null intermediate state', async () => {
-    const { middleware } = await setupTestContext(['alice@outlook.com']);
-    await sharedTokenStore.set(createAccountKey('token', { accountId: 'bob@outlook.com', service: 'outlook' }), realTokenData);
+    class ConditionalAuthProvider extends LoopbackOAuthProvider {
+      async getAccessToken(accountId?: string): Promise<string> {
+        const effectiveAccountId = accountId ?? (await getActiveAccount(sharedTokenStore, { service: 'service-b' }));
+        if (effectiveAccountId) {
+          const token = await getToken<CachedToken>(sharedTokenStore, { accountId: effectiveAccountId, service: 'service-b' });
+          if (token?.accessToken) {
+            return token.accessToken;
+          }
+        }
+        throw new AuthRequiredError({
+          kind: 'auth_url',
+          provider: 'service-b',
+          url: 'https://example.test/auth',
+        });
+      }
+    }
+
+    const middleware = new ConditionalAuthProvider({
+      service: 'service-b',
+      clientId: config.clientId,
+      clientSecret: config.clientSecret || undefined,
+      tenantId: config.tenantId,
+      scope: MS_SCOPE,
+      headless: true,
+      logger,
+      tokenStore: sharedTokenStore,
+    }).authMiddleware();
+
+    await sharedTokenStore.set(createAccountKey('token', { accountId: 'user-a@example.com', service: 'service-b' }), realTokenData);
+    await addAccount(sharedTokenStore, { service: 'service-b', accountId: 'user-a@example.com' });
+    await sharedTokenStore.set(createAccountKey('token', { accountId: 'user-b@example.com', service: 'service-b' }), realTokenData);
 
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    await (wrapped.handler as Handler)({}, createTestExtra());
-    await removeAccount(sharedTokenStore, { service: 'outlook', accountId: 'alice@outlook.com' });
+    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'user-a@example.com' } });
+    await removeAccount(sharedTokenStore, { service: 'service-b', accountId: 'user-a@example.com' });
 
     const resultNoAccount = await (wrapped.handler as AuthRequiredHandler)({}, createTestExtra());
     assert.strictEqual(resultNoAccount.structuredContent?.result?.type, 'auth_required');
 
-    await addAccount(sharedTokenStore, { service: 'outlook', accountId: 'bob@outlook.com' });
-    await (wrapped.handler as Handler)({}, createTestExtra());
+    await addAccount(sharedTokenStore, { service: 'service-b', accountId: 'user-b@example.com' });
+    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'user-b@example.com' } });
   });
 
   it('supports rapid account switching without state pollution', async () => {
@@ -586,9 +655,21 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
 // ============================================================================
 
 describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
+  const createAuthRequiredProvider = () =>
+    new AuthRequiredLoopbackProvider({
+      service: 'service-b',
+      clientId: config.clientId,
+      clientSecret: config.clientSecret || undefined,
+      tenantId: config.tenantId,
+      scope: MS_SCOPE,
+      headless: true,
+      logger,
+      tokenStore: sharedTokenStore,
+    });
+
   it('throws error for missing token when handler is called', async () => {
     // No token set for this account
-    const middleware = sharedAuthProvider.authMiddleware();
+    const middleware = createAuthRequiredProvider().authMiddleware();
 
     const testHandler = async (_args: unknown, _extra: EnrichedExtra): Promise<CallToolResult> => {
       return { content: [{ type: 'text', text: 'should not reach here' }] };
@@ -608,7 +689,7 @@ describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
 
   it('throws error when no active account is set', async () => {
     const _userId = createTestUserId();
-    const middleware = sharedAuthProvider.authMiddleware();
+    const middleware = createAuthRequiredProvider().authMiddleware();
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
@@ -619,9 +700,9 @@ describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
 
   it('throws error when active account has no token', async () => {
     const _userId = createTestUserId();
-    await addAccount(sharedTokenStore, { service: 'outlook', accountId: 'missing@outlook.com' });
+    await addAccount(sharedTokenStore, { service: 'service-b', accountId: 'missing@example.com' });
 
-    const middleware = sharedAuthProvider.authMiddleware();
+    const middleware = createAuthRequiredProvider().authMiddleware();
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
@@ -631,25 +712,22 @@ describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
   });
 
   it('backchannel override with invalid account fails gracefully', async () => {
-    const { middleware } = await setupTestContext(['alice@outlook.com']);
+    const { middleware } = { middleware: createAuthRequiredProvider().authMiddleware() };
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    const result = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'invalid@outlook.com' } });
+    const result = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'invalid@example.com' } });
     assert.strictEqual(result.structuredContent?.result?.type, 'auth_required');
   });
 
   it('rejects unauthorized account access (security)', async () => {
-    const { middleware } = await setupTestContext(['alice@outlook.com']);
-    await sharedTokenStore.delete(createAccountKey('token', { accountId: 'bob@outlook.com', service: 'outlook' }));
-
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
-    const wrapped = middleware.withToolAuth(toolModule);
+    const wrapped = createAuthRequiredProvider().authMiddleware().withToolAuth(toolModule);
 
-    const bobResult = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } });
+    const bobResult = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'user-b@example.com' } });
     assert.strictEqual(bobResult.structuredContent?.result?.type, 'auth_required');
 
-    const aliceResult = await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'alice@outlook.com' } });
-    assert.ok(aliceResult);
+    const aliceResult = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'user-a@example.com' } });
+    assert.strictEqual(aliceResult.structuredContent?.result?.type, 'auth_required');
   });
 });

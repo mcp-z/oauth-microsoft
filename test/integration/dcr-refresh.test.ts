@@ -13,18 +13,8 @@ import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import * as dcrUtils from '../../src/lib/dcr-utils.ts';
 import type { AccessToken } from '../../src/types.ts';
+import { MS_SCOPE } from '../constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
-
-// Read scope from environment variable (set in .env.test)
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} environment variable is required. Check .env.test`);
-  }
-  return value;
-}
-
-const MS_SCOPE = requireEnv('MS_SCOPE');
 
 interface DcrTokenData {
   clientId: string;

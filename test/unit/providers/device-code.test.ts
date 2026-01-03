@@ -1,4 +1,4 @@
-import '../../lib/env-loader.js';
+import '../../lib/env-loader.ts';
 
 /**
  * DeviceCodeProvider Unit Tests
@@ -14,9 +14,6 @@ import * as path from 'path';
 import { createConfig } from '../../lib/config.ts';
 
 const _config = createConfig();
-
-// Test scope for Microsoft Graph API
-const _MS_SCOPE = 'openid profile email offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send';
 
 // Use isolated test token directory
 // Run `npm run test:setup` first to generate tokens

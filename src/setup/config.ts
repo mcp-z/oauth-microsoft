@@ -46,8 +46,11 @@ function parseAuthMode(value: string): {
 
 /**
  * Transport type for MCP servers
+ *
+ * - 'stdio': Standard input/output transport
+ * - 'http': HTTP transport
  */
-type TransportType = 'stdio' | 'http';
+export type TransportType = 'stdio' | 'http';
 
 /**
  * Parse Microsoft OAuth configuration from CLI arguments and environment variables.
@@ -149,6 +152,9 @@ export function parseConfig(args: string[], env: Record<string, string | undefin
   const cliRedirectUri = typeof values['redirect-uri'] === 'string' ? values['redirect-uri'] : undefined;
   const envRedirectUri = env.REDIRECT_URI;
   const redirectUri = cliRedirectUri ?? envRedirectUri;
+  if (redirectUri && transport === 'stdio') {
+    throw new Error('REDIRECT_URI requires HTTP transport. The OAuth callback must be served over HTTP.');
+  }
 
   // Parse tenant-id (CLI overrides environment)
   const cliTenantId = typeof values['tenant-id'] === 'string' ? values['tenant-id'] : undefined;

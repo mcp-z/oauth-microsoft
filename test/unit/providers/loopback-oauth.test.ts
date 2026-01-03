@@ -1,4 +1,4 @@
-import '../../lib/env-loader.js';
+import '../../lib/env-loader.ts';
 
 /**
  * LoopbackOAuthProvider Unit Tests
@@ -14,14 +14,13 @@ import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import { LoopbackOAuthProvider } from '../../../src/providers/loopback-oauth.ts';
+import { MS_SCOPE } from '../../constants.ts';
 import { createConfig } from '../../lib/config.ts';
 import { logger } from '../../lib/test-utils.ts';
 
 const config = createConfig();
 
 // Test scope for Microsoft Graph API
-const MS_SCOPE = 'openid profile email offline_access https://graph.microsoft.com/User.Read https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send';
-
 // Use isolated test token directory
 // Run `npm run test:setup` first to generate tokens
 const tokenStorePath = path.join(process.cwd(), '.tokens/test');
