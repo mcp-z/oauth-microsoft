@@ -57,6 +57,27 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
   const router = express.Router();
   const { store, issuerUrl, baseUrl, scopesSupported, clientConfig } = config;
 
+  router.use('/mcp', (req: Request, res: Response, next) => {
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    const headerValue = Array.isArray(authHeader) ? authHeader[0] : authHeader;
+
+    if (!headerValue || !headerValue.toLowerCase().startsWith('bearer ')) {
+      return res
+        .status(401)
+        .set('WWW-Authenticate', `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`)
+        .json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32600,
+            message: 'Missing Authorization header. DCR mode requires bearer token.',
+          },
+          id: null,
+        });
+    }
+
+    return next();
+  });
+
   // Apply required middleware for OAuth 2.0 endpoints (RFC 6749)
   router.use(express.json()); // For /oauth/register (application/json)
   router.use(express.urlencoded({ extended: true })); // For /oauth/token (application/x-www-form-urlencoded)
