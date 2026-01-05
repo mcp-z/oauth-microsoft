@@ -17,6 +17,10 @@ import { randomUUID } from 'crypto';
 import type { Keyv } from 'keyv';
 import type { AccessToken, AuthorizationCode, RegisteredClient } from '../types.ts';
 
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+const ONE_HOUR_MS = 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 // ============================================================================
 // Client Operations
 // ============================================================================
@@ -162,7 +166,7 @@ export async function deleteClient(store: Keyv, clientId: string): Promise<void>
  * @param tokens - Microsoft provider tokens (access, refresh, expiry)
  */
 export async function setProviderTokens(store: Keyv, dcrToken: string, tokens: ProviderTokens): Promise<void> {
-  await store.set(`dcr:provider:${dcrToken}`, tokens);
+  await store.set(`dcr:provider:${dcrToken}`, tokens, ONE_HOUR_MS);
 }
 
 /**
@@ -198,7 +202,7 @@ export async function deleteProviderTokens(store: Keyv, dcrToken: string): Promi
  * @param authCode - Authorization code data
  */
 export async function setAuthCode(store: Keyv, code: string, authCode: AuthorizationCode): Promise<void> {
-  await store.set(`dcr:authcode:${code}`, authCode);
+  await store.set(`dcr:authcode:${code}`, authCode, TEN_MINUTES_MS);
 }
 
 /**
@@ -234,7 +238,7 @@ export async function deleteAuthCode(store: Keyv, code: string): Promise<void> {
  * @param tokenData - Access token data
  */
 export async function setAccessToken(store: Keyv, token: string, tokenData: AccessToken): Promise<void> {
-  await store.set(`dcr:access:${token}`, tokenData);
+  await store.set(`dcr:access:${token}`, tokenData, ONE_HOUR_MS);
 }
 
 /**
@@ -270,7 +274,7 @@ export async function deleteAccessToken(store: Keyv, token: string): Promise<voi
  * @param tokenData - Access token data (contains refresh token context)
  */
 export async function setRefreshToken(store: Keyv, token: string, tokenData: AccessToken): Promise<void> {
-  await store.set(`dcr:refresh:${token}`, tokenData);
+  await store.set(`dcr:refresh:${token}`, tokenData, THIRTY_DAYS_MS);
 }
 
 /**
