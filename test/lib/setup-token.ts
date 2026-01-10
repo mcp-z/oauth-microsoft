@@ -55,7 +55,16 @@ async function setupToken(): Promise<void> {
   console.log('Starting loopback OAuth flow...');
   console.log('');
 
-  await loopback.getAccessToken();
+  // Trigger OAuth flow via middleware (handles auth_url by opening browser + polling)
+  const loopbackMiddleware = loopback.authMiddleware();
+  const loopbackSetupTool = loopbackMiddleware.withToolAuth({
+    name: 'test-setup-loopback',
+    config: {},
+    handler: async () => {
+      return { ok: true };
+    },
+  });
+  await (loopbackSetupTool.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, {});
   const loopbackEmail = await loopback.getUserEmail();
 
   console.log('');
@@ -106,7 +115,16 @@ async function setupToken(): Promise<void> {
     console.log('');
 
     try {
-      await deviceCode.getAccessToken('device-code');
+      // Trigger OAuth flow via middleware (handles device code by polling for completion)
+      const deviceCodeMiddleware = deviceCode.authMiddleware();
+      const deviceCodeSetupTool = deviceCodeMiddleware.withToolAuth({
+        name: 'test-setup-device-code',
+        config: {},
+        handler: async () => {
+          return { ok: true };
+        },
+      });
+      await (deviceCodeSetupTool.handler as (args: unknown, extra: unknown) => Promise<unknown>)({ accountId: 'device-code' }, {});
       deviceEmail = await deviceCode.getUserEmail('device-code');
     } catch (error) {
       console.error('Device code flow failed:', error);
