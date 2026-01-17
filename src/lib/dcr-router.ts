@@ -201,12 +201,15 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       });
     }
 
+    // Use client-provided scope or fall back to server's supported scopes
+    const effectiveScope = typeof scope === 'string' && scope.trim() !== '' ? scope : scopesSupported.join(' ');
+
     // Store DCR request state for Microsoft OAuth callback
     const msState = randomUUID();
     const dcrRequestState = {
       client_id,
       redirect_uri,
-      scope: typeof scope === 'string' ? scope : '',
+      scope: effectiveScope,
       state: typeof state === 'string' ? state : undefined,
       code_challenge: typeof code_challenge === 'string' ? code_challenge : undefined,
       code_challenge_method: typeof code_challenge_method === 'string' ? code_challenge_method : undefined,
@@ -221,7 +224,7 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
     msAuthUrl.searchParams.set('client_id', clientConfig.clientId);
     msAuthUrl.searchParams.set('response_type', 'code');
     msAuthUrl.searchParams.set('redirect_uri', `${baseUrl}/oauth/callback`);
-    msAuthUrl.searchParams.set('scope', typeof scope === 'string' ? scope : '');
+    msAuthUrl.searchParams.set('scope', effectiveScope);
     msAuthUrl.searchParams.set('state', msState);
     msAuthUrl.searchParams.set('response_mode', 'query');
 
