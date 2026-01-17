@@ -192,19 +192,9 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     }
 
     const storedTokens = (await dcrStore.get('microsoft')) as DcrTokenData | undefined;
-    if (!storedTokens || !storedTokens.providerRefreshToken) {
-      console.log('\n⚠️  Skipped: No stored DCR tokens found. Run npm run test:setup first.\n');
-      this.skip();
-      return;
-    }
 
     const clientId = process.env.MS_CLIENT_ID;
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
-    if (!clientId) {
-      console.log('\n⚠️  Skipped: MS_CLIENT_ID not configured.\n');
-      this.skip();
-      return;
-    }
 
     const realProvider = new DcrOAuthProvider({
       clientId,
@@ -236,11 +226,6 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
 
     const clientId = process.env.MS_CLIENT_ID;
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
-    if (!clientId) {
-      console.log('\n⚠️  Skipped: MS_CLIENT_ID not configured.\n');
-      this.skip();
-      return;
-    }
 
     const realProvider = new DcrOAuthProvider({
       clientId,
