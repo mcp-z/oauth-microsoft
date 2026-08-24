@@ -549,7 +549,8 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
     let server: http.Server | null = null;
     let serverPort: number;
-    let finalRedirectUri: string; // set after listen
+    // Assigned in the listen callback, which always runs before the await below resolves.
+    let finalRedirectUri!: string;
 
     // Create ephemeral server with OS-assigned port (RFC 8252)
     server = this.createOAuthCallbackServer({

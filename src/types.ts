@@ -11,14 +11,11 @@ import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/proto
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Keyv } from 'keyv';
 
-// Re-export only essential shared types for public API
-export type { Logger, CachedToken, ToolModule, ProviderTokens, DcrClientMetadata, DcrClientInformation };
-
 // Re-export error class
 export { AuthRequiredError } from '@mcp-z/oauth';
-
+// Re-export only essential shared types for public API
 // Make internal types available for internal use without exporting
-export type { ToolHandler, AuthFlowDescriptor, OAuth2TokenStorageProvider, UserAuthProvider, RequestHandlerExtra, ServerRequest, ServerNotification };
+export type { AuthFlowDescriptor, CachedToken, DcrClientInformation, DcrClientMetadata, Logger, OAuth2TokenStorageProvider, ProviderTokens, RequestHandlerExtra, ServerNotification, ServerRequest, ToolHandler, ToolModule, UserAuthProvider };
 
 // ============================================================================
 // Core Authentication Types
