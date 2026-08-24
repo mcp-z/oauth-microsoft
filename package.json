@@ -34,7 +34,6 @@
     "./package.json": "./package.json"
   },
   "main": "./dist/cjs/index.js",
-  "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "files": [
     "dist"
@@ -64,7 +63,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.3",
+    "@types/node": "^26.2.0",
     "cors": "^2.0.0",
     "dotenv": "^17.2.3",
     "get-port": "^7.1.0",
@@ -79,6 +78,12 @@
   },
   "engines": {
     "node": ">=24"
+  },
+  "allowScripts": {
+    "node-filename-to-dist-paths": true,
+    "node-semvers": true,
+    "node-version-use": true,
+    "thread-sleep-compat": true
   },
   "tsds": {
     "source": "src/index.ts"

@@ -192,8 +192,10 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     }
 
     const storedTokens = (await dcrStore.get('microsoft')) as DcrTokenData | undefined;
+    assert.ok(storedTokens, 'No stored DCR tokens - run the DCR flow first');
 
     const clientId = process.env.MS_CLIENT_ID;
+    assert.ok(clientId, 'MS_CLIENT_ID must be set');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
@@ -225,6 +227,7 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     this.timeout(10000);
 
     const clientId = process.env.MS_CLIENT_ID;
+    assert.ok(clientId, 'MS_CLIENT_ID must be set');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
