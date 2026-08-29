@@ -8,6 +8,9 @@ import '../../lib/env-loader.ts';
 import assert from 'assert';
 import type { Server } from 'http';
 import { createServer } from 'http';
+import Keyv from 'keyv';
+import { KeyvFile } from 'keyv-file';
+import * as path from 'path';
 import type { DcrOAuthProviderConfig } from '../../../src/providers/dcr.ts';
 import { DcrOAuthProvider } from '../../../src/providers/dcr.ts';
 import type { ProviderTokens } from '../../../src/types.ts';
@@ -174,10 +177,6 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     this.timeout(30000);
 
     // Load stored DCR tokens from test-setup
-    const path = await import('path');
-    const Keyv = (await import('keyv')).default;
-    const { KeyvFile } = await import('keyv-file');
-
     const dcrTokenPath = path.join(process.cwd(), '.tokens/dcr.json');
     const dcrStore = new Keyv({
       store: new KeyvFile({ filename: dcrTokenPath }),
