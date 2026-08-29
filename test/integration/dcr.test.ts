@@ -7,6 +7,7 @@
 import '../lib/env-loader.ts';
 import { createServerRegistry } from '@mcp-z/client';
 import assert from 'assert';
+import Keyv from 'keyv';
 import { MS_SCOPE } from '../constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 import { logger } from '../lib/test-utils.ts';
@@ -74,7 +75,6 @@ describe('DCR Integration Test (Microsoft)', () => {
       try {
         // connect should automatically handle self-hosted DCR authentication
         // Use in-memory token store for this test
-        const Keyv = (await import('keyv')).default;
         const testTokenStore = new Keyv();
 
         const client = await registry.connect('test-dcr', {
@@ -164,7 +164,6 @@ describe('DCR Integration Test (Microsoft)', () => {
 
       try {
         // Create token store with EXPIRED tokens to simulate stale state
-        const Keyv = (await import('keyv')).default;
         const testTokenStore = new Keyv();
 
         // Pre-populate with expired tokens (simulates stale cache)
