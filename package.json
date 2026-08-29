@@ -51,13 +51,12 @@
     "version": "tsds version"
   },
   "dependencies": {
-    "@mcp-z/oauth": "^1.0.0",
+    "@mcp-z/oauth": "^1.0.5",
     "express": "^5.0.0",
-    "open": "^11.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@mcp-z/client": "^1.0.5",
+    "@mcp-z/client": "^1.0.11",
     "@microsoft/microsoft-graph-client": "^3.0.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@types/cors": "^2.8.19",
@@ -66,7 +65,7 @@
     "@types/node": "^26.2.0",
     "cors": "^2.0.0",
     "dotenv": "^17.2.3",
-    "get-port": "^7.1.0",
+    "get-port": "5.1.1",
     "keyv": "^5.0.0",
     "keyv-file": "5.3.3",
     "node-version-use": "^2.4.7",
@@ -77,7 +76,7 @@
     "keyv": "^5.0.0"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=18"
   },
   "allowScripts": {
     "node-filename-to-dist-paths": true,

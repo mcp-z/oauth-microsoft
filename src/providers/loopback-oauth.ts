@@ -17,18 +17,17 @@
  * CHANGE (2026-01-03):
  * - Non-headless mode now opens the auth URL AND blocks (polls) until tokens are available,
  *   for BOTH redirectUri (persistent) and ephemeral (loopback) modes.
- * - Ephemeral flow no longer calls `open()` itself. Instead it:
+ * - Ephemeral flow no longer calls `openUrl()` itself. Instead it:
  *   1) starts the loopback callback server
  *   2) throws AuthRequiredError(auth_url)
  * - Middleware catches AuthRequiredError(auth_url):
- *   - if not headless: open(url) once + poll pending state until callback completes (or timeout)
+ *   - if not headless: openUrl(url) once + poll pending state until callback completes (or timeout)
  *   - then retries token acquisition and injects authContext in the SAME tool call.
  */
 
-import { addAccount, generatePKCE, getActiveAccount, getErrorTemplate, getSuccessTemplate, getToken, type OAuth2TokenStorageProvider, setAccountInfo, setActiveAccount, setToken } from '@mcp-z/oauth';
+import { addAccount, generatePKCE, getActiveAccount, getErrorTemplate, getSuccessTemplate, getToken, type OAuth2TokenStorageProvider, openUrl, setAccountInfo, setActiveAccount, setToken } from '@mcp-z/oauth';
 import { randomUUID } from 'crypto';
 import * as http from 'http';
-import open from 'open';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import { type AuthContext, type AuthFlowDescriptor, AuthRequiredError, type CachedToken, type EnrichedExtra, type LoopbackOAuthConfig } from '../types.ts';
 
@@ -794,7 +793,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
               if (!this.openedStates.has(state)) {
                 this.openedStates.add(state);
-                open(error.descriptor.url).catch((e: unknown) => {
+                openUrl(error.descriptor.url).catch((e: unknown) => {
                   logger.info('Failed to open browser automatically', { error: e instanceof Error ? e.message : String(e) });
                 });
               }

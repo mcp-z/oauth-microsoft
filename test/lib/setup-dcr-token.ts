@@ -11,10 +11,10 @@
  */
 
 import { DynamicClientRegistrar, OAuthCallbackListener, probeAuthCapabilities } from '@mcp-z/client';
+import { openUrl } from '@mcp-z/oauth';
 import getPort from 'get-port';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
-import open from 'open';
 import * as path from 'path';
 import type { Logger } from '../../src/types.ts';
 import { startDcrTestServer } from './servers/dcr-test-server.ts';
@@ -96,7 +96,7 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
 
     // Open browser for user authorization
     console.log('\n📋 Please authorize in your browser...');
-    await open(authUrl.toString());
+    await openUrl(authUrl.toString());
 
     // Wait for callback
     console.log('⏳ Waiting for authorization callback...');
