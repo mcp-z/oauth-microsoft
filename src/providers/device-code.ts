@@ -14,9 +14,8 @@
  * Similar to service accounts in usage pattern: single static identity, minimal account management.
  */
 
-import { getToken, type OAuth2TokenStorageProvider, setToken } from '@mcp-z/oauth';
+import { getToken, type OAuth2TokenStorageProvider, openUrl, setToken } from '@mcp-z/oauth';
 import type { Keyv } from 'keyv';
-import open from 'open';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import type { AuthContext, CachedToken, EnrichedExtra, Logger, MicrosoftAuthProvider, MicrosoftService } from '../types.ts';
 
@@ -147,7 +146,7 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
     if (!headless) {
       const urlToOpen = verification_uri_complete || verification_uri;
       try {
-        await open(urlToOpen);
+        await openUrl(urlToOpen);
         logger.debug('Opened browser to verification URL', { url: urlToOpen });
       } catch (error) {
         logger.debug('Failed to open browser', { error: error instanceof Error ? error.message : String(error) });
