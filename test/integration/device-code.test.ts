@@ -12,13 +12,13 @@
  */
 
 import type { ToolModule } from '@mcp-z/oauth';
+import { DeviceCodeProvider } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
-import { DeviceCodeProvider } from '../../src/index.ts';
-import { MS_SCOPE } from '../constants.ts';
 import { createConfig } from '../lib/config.ts';
+import { MS_SCOPE } from '../lib/constants.ts';
 import { logger } from '../lib/test-utils.ts';
 
 const config = createConfig();

@@ -17,7 +17,7 @@ import * as path from 'path';
 import { DeviceCodeProvider } from '../../src/providers/device-code.ts';
 import { LoopbackOAuthProvider } from '../../src/providers/loopback-oauth.ts';
 import { createConfig } from '../../src/setup/config.ts';
-import { MS_SCOPE } from '../constants.ts';
+import { MS_SCOPE } from './constants.ts';
 import { loadDcrTokens } from './dcr-token-helper.ts';
 import { setupDcrToken } from './setup-dcr-token.ts';
 import { logger } from './test-utils.ts';

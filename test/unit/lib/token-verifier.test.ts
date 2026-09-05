@@ -5,11 +5,11 @@
  * in isolation without a full DCR router setup.
  */
 
+import type { AuthInfo } from '@mcp-z/oauth-microsoft';
+import { DcrTokenVerifier } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import type { Server } from 'http';
 import { createServer } from 'http';
-import type { AuthInfo } from '../../../src/lib/token-verifier.ts';
-import { DcrTokenVerifier } from '../../../src/lib/token-verifier.ts';
 
 describe('DcrTokenVerifier', () => {
   let server: Server;

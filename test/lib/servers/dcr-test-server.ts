@@ -130,8 +130,10 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
   mcpRouter.use(
     cors({
       origin: '*',
-      exposedHeaders: ['Mcp-Session-Id'],
-      allowedHeaders: ['Content-Type', 'mcp-session-id'],
+      // Stateless: no session id is ever issued, so there is nothing to expose.
+      // 'authorization' is required for the DCR bearer flow; 'mcp-protocol-version'
+      // is required on HTTP requests as of spec 2025-06-18.
+      allowedHeaders: ['content-type', 'authorization', 'mcp-protocol-version'],
     })
   );
 

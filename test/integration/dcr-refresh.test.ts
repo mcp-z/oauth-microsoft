@@ -13,7 +13,7 @@ import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import * as dcrUtils from '../../src/lib/dcr-utils.ts';
 import type { AccessToken } from '../../src/types.ts';
-import { MS_SCOPE } from '../constants.ts';
+import { MS_SCOPE } from '../lib/constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 
 interface DcrTokenData {
