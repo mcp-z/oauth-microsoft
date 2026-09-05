@@ -8,7 +8,7 @@ import '../lib/env-loader.ts';
 import { createServerRegistry } from '@mcp-z/client';
 import assert from 'assert';
 import Keyv from 'keyv';
-import { MS_SCOPE } from '../constants.ts';
+import { MS_SCOPE } from '../lib/constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 import { logger } from '../lib/test-utils.ts';
 

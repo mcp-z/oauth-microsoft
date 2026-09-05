@@ -97,7 +97,7 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
-      code_challenge_methods_supported: ['S256', 'plain'],
+      code_challenge_methods_supported: ['S256'],
       service_documentation: `${baseUrl}/docs`,
     };
     res.json(metadata);
@@ -166,6 +166,18 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       return res.status(400).json({
         error: 'unsupported_response_type',
         error_description: 'Only response_type=code is supported',
+      });
+    }
+
+    // PKCE downgrade guard (RFC 7636). 'plain' sends the verifier in the clear on the
+    // authorization request, so anyone who observes it can replay the code. RFC 7636 s4.3
+    // makes 'plain' the default when the method is omitted, so an absent method is the same
+    // downgrade spelled differently - both are refused here rather than at the token
+    // endpoint, so the client fails before the browser round trip instead of after it.
+    if (code_challenge !== undefined && code_challenge_method !== 'S256') {
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'Only code_challenge_method=S256 is supported',
       });
     }
 
@@ -431,8 +443,15 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
         }
 
         // Validate code_verifier against code_challenge
-        const method = authCode.code_challenge_method ?? 'plain';
-        const computedChallenge = method === 'S256' ? createHash('sha256').update(code_verifier).digest('base64url') : code_verifier;
+        // S256 only - the authorize endpoint refuses anything else, so a stored challenge
+        // with another method predates that guard and must not be honored.
+        if (authCode.code_challenge_method !== 'S256') {
+          return res.status(400).json({
+            error: 'invalid_grant',
+            error_description: 'Only code_challenge_method=S256 is supported',
+          });
+        }
+        const computedChallenge = createHash('sha256').update(code_verifier).digest('base64url');
 
         if (computedChallenge !== authCode.code_challenge) {
           return res.status(400).json({

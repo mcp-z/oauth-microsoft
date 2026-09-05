@@ -1,7 +1,6 @@
 # @mcp-z/oauth-microsoft
 
-Docs: https://mcp-z.github.io/oauth-microsoft
-OAuth client for Microsoft Graph with multi-account support and PKCE.
+OAuth 2.0 client for Microsoft Graph with multi-account support, PKCE security, and swappable storage backends
 
 ## Common uses
 
@@ -104,3 +103,7 @@ Use `parseConfig()` and `parseDcrConfig()` to load CLI + env settings for server
 ## Requirements
 
 - Node.js >= 22
+
+### Documentation
+
+[API Docs](https://mcp-z.github.io/oauth-microsoft)

@@ -12,6 +12,7 @@ import '../lib/env-loader.ts';
  */
 
 import type { ToolModule } from '@mcp-z/oauth';
+import { LoopbackOAuthProvider } from '@mcp-z/oauth-microsoft';
 import { Client } from '@microsoft/microsoft-graph-client';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -19,9 +20,8 @@ import assert from 'assert';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
-import { LoopbackOAuthProvider } from '../../src/index.ts';
-import { MS_SCOPE } from '../constants.ts';
 import { createConfig } from '../lib/config.ts';
+import { MS_SCOPE } from '../lib/constants.ts';
 import { logger } from '../lib/test-utils.ts';
 
 const config = createConfig();
