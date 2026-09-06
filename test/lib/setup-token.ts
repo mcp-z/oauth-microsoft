@@ -251,7 +251,7 @@ async function setupToken(): Promise<void> {
   console.log('📁 DCR tokens: .tokens/dcr.json');
   console.log('');
   console.log('Run `npm test` to verify Microsoft Graph integration');
-  console.log('Run `npm run test:integration` to verify DCR flow');
+  console.log('Run `npm test` to verify the loopback and DCR flows');
 }
 
 // Run if executed directly
