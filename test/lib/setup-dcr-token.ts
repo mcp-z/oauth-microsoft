@@ -10,7 +10,7 @@
  *   Called by setup-token.ts
  */
 
-import { DynamicClientRegistrar, OAuthCallbackListener, probeAuthCapabilities } from '@mcp-z/client';
+import { DynamicClientRegistrar, isLoopbackUrl, OAuthCallbackListener, probeAuthCapabilities } from '@mcp-z/client';
 import { openUrl } from '@mcp-z/oauth';
 import getPort from 'get-port';
 import Keyv from 'keyv';
@@ -82,6 +82,10 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
     const registration = await registrar.registerClient(capabilities.registrationEndpoint, {
       clientName: 'DCR Test Setup (Microsoft)',
       redirectUri: callbackUrl,
+      // @mcp-z/client 1.2.0's SSRF hardening refuses http:// unless the caller grants
+      // loopback trust. Grant it from the URL this script configured, never from
+      // discovery data.
+      allowLoopback: isLoopbackUrl(BASE_URL),
     });
     console.log(`   Client ID: ${registration.clientId}`);
 
