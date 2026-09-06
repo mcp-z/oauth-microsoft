@@ -12,7 +12,7 @@ import '../../lib/env-loader.ts';
 
 import { addAccount, type CachedToken, createAccountKey, createServiceKey, getActiveAccount, getToken, removeAccount, setActiveAccount } from '@mcp-z/oauth';
 import { AuthRequiredError, type EnrichedExtra, LoopbackOAuthProvider, type ToolModule } from '@mcp-z/oauth-microsoft';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import { mkdirSync } from 'fs';
 import Keyv from 'keyv';
@@ -256,7 +256,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
     } as unknown as ToolModule);
 
     // Execute handler with account override
-    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, { ...createTestExtra(), _meta: { accountId: 'alice@outlook.com' } });
+    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'alice@outlook.com' } } }));
 
     // Verify auth context was injected
     assert.ok(capturedExtra, 'Extra should be captured');
@@ -297,7 +297,7 @@ describe('LoopbackOAuthProvider Middleware - Basic Functionality', () => {
       config: { inputSchema: {}, outputSchema: testOutputSchema },
       handler: testHandler,
     } as unknown as ToolModule);
-    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } });
+    await (toolModule.handler as (args: unknown, extra: unknown) => Promise<unknown>)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'bob@outlook.com' } } }));
 
     assert.ok(capturedExtra, 'Extra should be captured');
     const typedExtra = capturedExtra as {
@@ -527,7 +527,7 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
 
     const { captured, toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } });
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'bob@outlook.com' } } }));
     assert.strictEqual(captured[0], 'bob@outlook.com');
   });
 
@@ -540,8 +540,8 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
     const wrapped = middleware.withToolAuth(toolModule);
 
     await (wrapped.handler as Handler)({}, createTestExtra());
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } });
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'charlie@outlook.com' } });
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'bob@outlook.com' } } }));
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'charlie@outlook.com' } } }));
     await (wrapped.handler as Handler)({}, createTestExtra());
 
     assert.deepStrictEqual(captured, ['alice@outlook.com', 'bob@outlook.com', 'charlie@outlook.com', 'alice@outlook.com']);
@@ -595,10 +595,10 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
 
   it('preserves _meta fields other than accountId', async () => {
     const { middleware } = await setupTestContext(['alice@outlook.com']);
-    const { captured, toolModule } = createCapturingTool((e) => e._meta);
+    const { captured, toolModule } = createCapturingTool((e) => e.mcpReq._meta);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'alice@outlook.com', customField: 'test-value' } });
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'alice@outlook.com', customField: 'test-value' } } }));
 
     assert.ok(captured[0]);
     assert.strictEqual((captured[0] as { accountId?: string; customField?: string }).accountId, 'alice@outlook.com');
@@ -641,14 +641,14 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'user-a@example.com' } });
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'user-a@example.com' } } }));
     await removeAccount(sharedTokenStore, { service: 'service-b', accountId: 'user-a@example.com' });
 
     const resultNoAccount = await (wrapped.handler as AuthRequiredHandler)({}, createTestExtra());
     assert.strictEqual(resultNoAccount.structuredContent?.result?.type, 'auth_required');
 
     await addAccount(sharedTokenStore, { service: 'service-b', accountId: 'user-b@example.com' });
-    await (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'user-b@example.com' } });
+    await (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'user-b@example.com' } } }));
   });
 
   it('supports rapid account switching without state pollution', async () => {
@@ -674,7 +674,7 @@ describe('LoopbackOAuthProvider Middleware - Multi-Account Switching', () => {
     const { captured, toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    await Promise.all([(wrapped.handler as Handler)({}, createTestExtra()), (wrapped.handler as Handler)({}, { ...createTestExtra(), _meta: { accountId: 'bob@outlook.com' } }), (wrapped.handler as Handler)({}, createTestExtra())]);
+    await Promise.all([(wrapped.handler as Handler)({}, createTestExtra()), (wrapped.handler as Handler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'bob@outlook.com' } } })), (wrapped.handler as Handler)({}, createTestExtra())]);
 
     assert.strictEqual(captured.length, 3);
     const aliceCount = captured.filter((id) => id === 'alice@outlook.com').length;
@@ -750,7 +750,7 @@ describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = middleware.withToolAuth(toolModule);
 
-    const result = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'invalid@example.com' } });
+    const result = await (wrapped.handler as AuthRequiredHandler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'invalid@example.com' } } }));
     assert.strictEqual(result.structuredContent?.result?.type, 'auth_required');
   });
 
@@ -758,10 +758,10 @@ describe('LoopbackOAuthProvider Middleware - Error Handling', () => {
     const { toolModule } = createCapturingTool((e) => e.authContext.accountId);
     const wrapped = createAuthRequiredProvider().authMiddleware().withToolAuth(toolModule);
 
-    const bobResult = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'user-b@example.com' } });
+    const bobResult = await (wrapped.handler as AuthRequiredHandler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'user-b@example.com' } } }));
     assert.strictEqual(bobResult.structuredContent?.result?.type, 'auth_required');
 
-    const aliceResult = await (wrapped.handler as AuthRequiredHandler)({}, { ...createTestExtra(), _meta: { accountId: 'user-a@example.com' } });
+    const aliceResult = await (wrapped.handler as AuthRequiredHandler)({}, createTestExtra({ mcpReq: { _meta: { accountId: 'user-a@example.com' } } }));
     assert.strictEqual(aliceResult.structuredContent?.result?.type, 'auth_required');
   });
 });

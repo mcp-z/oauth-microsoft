@@ -4,16 +4,12 @@ import type { UserAuthProvider } from '../../src/types.ts';
 /**
  * Create test extra object for handler tests
  */
-export function createTestExtra(overrides?: Partial<EnrichedExtra>): EnrichedExtra {
+export function createTestExtra(overrides?: Partial<Omit<EnrichedExtra, 'mcpReq'>> & { mcpReq?: Partial<EnrichedExtra['mcpReq']> }): EnrichedExtra {
+  const { mcpReq, ...rest } = overrides ?? {};
   return {
-    requestInfo: {
-      headers: {},
-      url: 'http://test.local',
-      method: 'POST',
-      ...overrides?.requestInfo,
-    },
-    _meta: overrides?._meta || {},
-    ...overrides,
+    http: { req: new Request('http://test.local', { method: 'POST' }) },
+    ...rest,
+    mcpReq: { _meta: {}, ...mcpReq },
   } as EnrichedExtra;
 }
 

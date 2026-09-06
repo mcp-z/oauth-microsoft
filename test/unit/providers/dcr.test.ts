@@ -10,7 +10,7 @@ import '../../lib/env-loader.ts';
 
 import type { ProviderTokens } from '@mcp-z/oauth';
 import { DcrOAuthProvider, type DcrOAuthProviderConfig, type EnrichedExtra, type ToolModule } from '@mcp-z/oauth-microsoft';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import express from 'express';
 import type { Server } from 'http';
@@ -374,7 +374,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
     const wrappedTool = middleware.withToolAuth(testTool);
 
     const extra = createTestExtra({
-      requestInfo: { headers: {} }, // No Authorization header
+      http: { req: new Request('http://test.local') }, // No Authorization header
     });
 
     try {
@@ -391,11 +391,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
     const wrappedTool = middleware.withToolAuth(testTool);
 
     const extra = createTestExtra({
-      requestInfo: {
-        headers: {
-          authorization: 'Bearer invalid_token_12345',
-        },
-      },
+      http: { req: new Request('http://test.local', { headers: { authorization: 'Bearer invalid_token_12345' } }) },
     });
 
     try {
@@ -412,9 +408,27 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
     const wrappedTool = middleware.withToolAuth(testTool);
 
     const extra = createTestExtra({
-      requestInfo: {
-        headers: {
-          authorization: `Bearer ${validBearerToken}`,
+      http: { req: new Request('http://test.local', { headers: { authorization: `Bearer ${validBearerToken}` } }) },
+    });
+
+    // Tool handler validates authContext presence (will throw if missing)
+    const result = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);
+
+    assert.ok(result);
+    assert.strictEqual((result.structuredContent as { result?: string }).result, 'success');
+  });
+
+  it('extracts bearer token from authInfo when present', async () => {
+    const middleware = provider.authMiddleware();
+    const wrappedTool = middleware.withToolAuth(testTool);
+
+    const extra = createTestExtra({
+      http: {
+        req: new Request('http://test.local'),
+        authInfo: {
+          token: validBearerToken, // SDK already extracted token
+          clientId: 'test-client',
+          scopes: [],
         },
       },
     });
@@ -423,27 +437,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
     const result = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);
 
     assert.ok(result);
-    assert.strictEqual(result.structuredContent?.result, 'success');
-  });
-
-  it('extracts bearer token from authInfo when present', async () => {
-    const middleware = provider.authMiddleware();
-    const wrappedTool = middleware.withToolAuth(testTool);
-
-    const extra = createTestExtra({
-      requestInfo: { headers: {} },
-      authInfo: {
-        token: validBearerToken, // SDK already extracted token
-        clientId: 'test-client',
-        scopes: [],
-      },
-    });
-
-    // Tool handler validates authContext presence (will throw if missing)
-    const result = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);
-
-    assert.ok(result);
-    assert.strictEqual(result.structuredContent?.result, 'success');
+    assert.strictEqual((result.structuredContent as { result?: string }).result, 'success');
   });
 
   it('handles case-insensitive Bearer prefix', async () => {
@@ -452,11 +446,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
 
     // Test lowercase 'bearer'
     const extraLower = createTestExtra({
-      requestInfo: {
-        headers: {
-          authorization: `bearer ${validBearerToken}`,
-        },
-      },
+      http: { req: new Request('http://test.local', { headers: { authorization: `bearer ${validBearerToken}` } }) },
     });
 
     const resultLower = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extraLower);
@@ -464,11 +454,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
 
     // Test mixed case 'BeArEr'
     const extraMixed = createTestExtra({
-      requestInfo: {
-        headers: {
-          authorization: `BeArEr ${validBearerToken}`,
-        },
-      },
+      http: { req: new Request('http://test.local', { headers: { authorization: `BeArEr ${validBearerToken}` } }) },
     });
 
     const resultMixed = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extraMixed);
@@ -506,9 +492,7 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
     const wrappedTool = middleware.withToolAuth(captureTool);
 
     const extra = createTestExtra({
-      requestInfo: {
-        headers: { authorization: `Bearer ${validBearerToken}` },
-      },
+      http: { req: new Request('http://test.local', { headers: { authorization: `Bearer ${validBearerToken}` } }) },
     });
 
     await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);

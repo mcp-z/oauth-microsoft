@@ -15,7 +15,7 @@ import '../../lib/env-loader.ts';
 
 import { createAccountKey } from '@mcp-z/oauth';
 import { DeviceCodeProvider, type EnrichedExtra, type ToolModule } from '@mcp-z/oauth-microsoft';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import * as fs from 'fs';
 import Keyv from 'keyv';
