@@ -4,9 +4,9 @@
  */
 
 import type { ToolConfig, ToolHandler, ToolModule } from '@mcp-z/oauth';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
+import type { CallToolResult } from '@modelcontextprotocol/server';
+import { McpServer } from '@modelcontextprotocol/server';
 import cors from 'cors';
 import express from 'express';
 import type { Server } from 'http';
@@ -60,11 +60,11 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
       config: {
         title: 'Echo Tool',
         description: 'Echoes back the provided message and auth context',
-        inputSchema: { message: z.string() },
-        outputSchema: {
+        inputSchema: z.object({ message: z.string() }),
+        outputSchema: z.object({
           echo: z.string(),
           accountId: z.string().optional(), // User email from auth context
-        },
+        }),
       },
       handler: async (args: { message: string }, extra: Record<string, unknown>): Promise<CallToolResult> => {
         const { message } = args;
@@ -123,7 +123,7 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
     return server;
   };
 
-  // Setup HTTP server with MCP endpoints at /mcp using StreamableHTTPServerTransport
+  // Setup HTTP server with MCP endpoints at /mcp using NodeStreamableHTTPServerTransport
   const mcpRouter = express.Router();
 
   // Configure CORS for MCP endpoint
@@ -139,7 +139,7 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
 
   // Handle MCP requests with stateless transport
   mcpRouter.post('/', async (req, res) => {
-    const transport = new StreamableHTTPServerTransport({
+    const transport = new NodeStreamableHTTPServerTransport({
       sessionIdGenerator: undefined, // Stateless mode
     });
 

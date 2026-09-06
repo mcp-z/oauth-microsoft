@@ -16,19 +16,18 @@
  */
 
 import type { ToolConfig } from '@mcp-z/oauth';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type { CallToolResult, ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult, ServerContext } from '@modelcontextprotocol/server';
+import { McpServer } from '@modelcontextprotocol/server';
+import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
 
 /**
  * Extract OAuth token from MCP context (stateless mode)
- * MCP SDK provides tokens in extra._meta.oauth.token
+ * MCP SDK provides tokens in ctx.mcpReq._meta.oauth.token
  */
-function extractTokenFromContext(extra: RequestHandlerExtra<ServerRequest, ServerNotification>): string {
+function extractTokenFromContext(ctx: ServerContext): string {
   // Type-safe access to optional OAuth token in meta
-  const token = (extra._meta as { oauth?: { token?: string } } | undefined)?.oauth?.token;
+  const token = (ctx.mcpReq._meta as { oauth?: { token?: string } } | undefined)?.oauth?.token;
   if (!token || typeof token !== 'string') {
     throw new Error('No OAuth token provided in MCP context. Client must provide token via capabilities.experimental.oauth');
   }
@@ -45,24 +44,24 @@ async function main() {
   const messageSearchConfig: ToolConfig = {
     title: 'Search Outlook Messages',
     description: 'Search messages in Outlook mailbox',
-    inputSchema: {
+    inputSchema: z.object({
       fields: z.string().optional(),
       query: z.string().optional(),
-    },
-    outputSchema: {
+    }),
+    outputSchema: z.object({
       messages: z.array(
         z.object({
           id: z.string(),
           subject: z.string().optional(),
         })
       ),
-    },
+    }),
   };
 
   server.registerTool('outlook-message-search', messageSearchConfig, async (_args: unknown, extra: unknown): Promise<CallToolResult> => {
     try {
       // Extract token from MCP context (stateless mode)
-      const accessToken = extractTokenFromContext(extra as RequestHandlerExtra<ServerRequest, ServerNotification>);
+      const accessToken = extractTokenFromContext(extra as ServerContext);
 
       // Make real Microsoft Graph API call
       const response = await fetch('https://graph.microsoft.com/v1.0/me/messages?$top=10&$select=id,subject,from', {
@@ -95,15 +94,15 @@ async function main() {
   const accountCurrentConfig: ToolConfig = {
     title: 'Get Current Outlook Account',
     description: 'Get current authenticated Outlook account',
-    outputSchema: {
+    outputSchema: z.object({
       email: z.string(),
-    },
+    }),
   };
 
   server.registerTool('outlook-account-current', accountCurrentConfig, async (extra: unknown): Promise<CallToolResult> => {
     try {
       // Extract token from MCP context (stateless mode)
-      const accessToken = extractTokenFromContext(extra as RequestHandlerExtra<ServerRequest, ServerNotification>);
+      const accessToken = extractTokenFromContext(extra as ServerContext);
 
       // Make real Microsoft Graph API call to get user email
       const response = await fetch('https://graph.microsoft.com/v1.0/me', {

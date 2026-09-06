@@ -9,7 +9,7 @@
  */
 
 import type { ProviderTokens } from '@mcp-z/oauth';
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import type { AuthContext, EnrichedExtra, Logger, MicrosoftAuthProvider } from '../types.ts';
 
@@ -233,31 +233,27 @@ export class DcrOAuthProvider {
         let bearerToken: string | undefined;
 
         // Option 1: Token already verified by SDK's bearerAuth middleware
-        if (extra.authInfo && typeof extra.authInfo === 'object') {
+        if (extra.http?.authInfo && typeof extra.http.authInfo === 'object') {
           // authInfo contains the validated token - extract it
           // The SDK's bearerAuth middleware already validated it, but we need the raw token for /oauth/verify
           // Check if authInfo has the token directly, otherwise extract from headers
-          const authInfo = extra.authInfo as unknown as Record<string, unknown>;
+          const authInfo = extra.http.authInfo as unknown as Record<string, unknown>;
           bearerToken = (typeof authInfo.accessToken === 'string' ? authInfo.accessToken : undefined) ?? (typeof authInfo.token === 'string' ? authInfo.token : undefined);
         }
 
         // Option 2: Extract from Authorization header
-        if (!bearerToken && extra.requestInfo?.headers) {
-          const authHeader = extra.requestInfo.headers.authorization || extra.requestInfo.headers.Authorization;
+        if (!bearerToken) {
+          const authHeader = extra.http?.req?.headers.get('authorization');
           if (authHeader) {
-            // Handle both string and string[] types
-            const headerValue = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-            if (headerValue) {
-              const match = /^Bearer\s+(.+)$/i.exec(headerValue);
-              if (match) {
-                bearerToken = match[1];
-              }
+            const match = /^Bearer\s+(.+)$/i.exec(authHeader);
+            if (match) {
+              bearerToken = match[1];
             }
           }
         }
 
         if (!bearerToken) {
-          throw new McpError(ErrorCode.InvalidRequest, 'Missing Authorization header. DCR mode requires bearer token.');
+          throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'Missing Authorization header. DCR mode requires bearer token.');
         }
 
         // Call /oauth/verify to validate DCR token and get provider tokens
@@ -266,7 +262,7 @@ export class DcrOAuthProvider {
         });
 
         if (!verifyResponse.ok) {
-          throw new McpError(ErrorCode.InvalidRequest, `Token verification failed: ${verifyResponse.status}`);
+          throw new ProtocolError(ProtocolErrorCode.InvalidRequest, `Token verification failed: ${verifyResponse.status}`);
         }
 
         const verifyData = (await verifyResponse.json()) as {
@@ -278,7 +274,7 @@ export class DcrOAuthProvider {
         try {
           accountId = await this.getUserEmail(verifyData.providerTokens);
         } catch (error) {
-          throw new McpError(ErrorCode.InternalError, `Failed to get user email for DCR authentication: ${error instanceof Error ? error.message : String(error)}`);
+          throw new ProtocolError(ProtocolErrorCode.InternalError, `Failed to get user email for DCR authentication: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Create auth provider from provider tokens

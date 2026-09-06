@@ -721,7 +721,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
    *
    * Single-user mode:
    * - Maintains per-service active accounts in storage
-   * - Supports backchannel account override via extra._meta.accountId
+   * - Supports backchannel account override via extra.mcpReq._meta.accountId
    * - Automatically enhances output schemas with auth_required branch
    *
    * Example:
@@ -759,10 +759,10 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         // Helper: retry once after open+poll completes
         const ensureAuthenticatedOrThrow = async (): Promise<string> => {
           try {
-            // Check for backchannel override via _meta.accountId
+            // Check for backchannel override via mcpReq._meta.accountId
             let accountId: string | undefined;
             try {
-              accountId = extra._meta?.accountId ?? (await getActiveAccount(tokenStore, { service }));
+              accountId = (extra.mcpReq?._meta?.accountId as string | undefined) ?? (await getActiveAccount(tokenStore, { service }));
             } catch (error) {
               if (error instanceof Error && (((error as { code?: string }).code === 'REQUIRES_AUTHENTICATION' || error.name === 'AccountManagerError') as boolean)) {
                 accountId = undefined;

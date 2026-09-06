@@ -14,8 +14,7 @@ import '../lib/env-loader.ts';
 import type { ToolModule } from '@mcp-z/oauth';
 import { LoopbackOAuthProvider } from '@mcp-z/oauth-microsoft';
 import { Client } from '@microsoft/microsoft-graph-client';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { ServerContext } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
@@ -194,7 +193,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
         // Wrap handler with auth middleware
         const wrappedHandler = wrapHandlerWithAuth(testHandler, 'test operation', testSchema) as (args: unknown, extra: unknown) => Promise<{ content: unknown[] }>;
 
-        // Call handler (no _meta.accountId provided)
+        // Call handler (no mcpReq._meta.accountId provided)
         await wrappedHandler({}, {});
 
         // Verify fixed account was used
@@ -204,7 +203,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
       it('should use fixed account for real Microsoft Graph API calls', async () => {
         // Test tool handler that makes real API call
         let userEmail: string | undefined;
-        const testHandler = async (_args: unknown, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        const testHandler = async (_args: unknown, extra: ServerContext) => {
           const auth = (
             extra as {
               authContext?: { auth?: { getAccessToken: () => Promise<string> } };
@@ -244,7 +243,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
       it('should consistently use same account across multiple calls', async () => {
         const capturedAccounts: string[] = [];
 
-        const testHandler = async (_args: unknown, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        const testHandler = async (_args: unknown, extra: ServerContext) => {
           const accountId = (extra as { authContext?: { accountId?: string } }).authContext?.accountId;
           assert.ok(accountId, 'Account ID should be defined');
           capturedAccounts.push(accountId);
@@ -272,9 +271,9 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
       // NOTE: In the new API, authMiddleware() SUPPORTS backchannel overrides
       // This matches multipleUserMiddleware() for consistency and simplicity
 
-      it('should support account override via _meta.accountId', async () => {
+      it('should support account override via mcpReq._meta.accountId', async () => {
         let capturedAccountId: string | undefined;
-        const testHandler = async (_args: unknown, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        const testHandler = async (_args: unknown, extra: ServerContext) => {
           capturedAccountId = (extra as { authContext?: { accountId?: string } }).authContext?.accountId;
           return { content: [] };
         };
@@ -286,7 +285,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
         const wrappedHandler = wrapHandlerWithAuth(testHandler, 'test operation', testSchema) as (args: unknown, extra: unknown) => Promise<{ content: unknown[] }>;
 
         // Override with testAccountId (which has a token)
-        await wrappedHandler({}, { _meta: { accountId: testAccountId } });
+        await wrappedHandler({}, { mcpReq: { _meta: { accountId: testAccountId } } });
 
         // Verify override was applied
         assert.strictEqual(capturedAccountId, testAccountId, 'Should use override account');
@@ -294,7 +293,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
 
       it('should prioritize override over active account', async () => {
         const capturedAccounts: string[] = [];
-        const testHandler = async (_args: unknown, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        const testHandler = async (_args: unknown, extra: ServerContext) => {
           const accountId = (extra as { authContext?: { accountId?: string } }).authContext?.accountId;
           assert.ok(accountId, 'Account ID should be defined');
           capturedAccounts.push(accountId);
@@ -308,7 +307,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
         const wrappedHandler = wrapHandlerWithAuth(testHandler, 'test operation', testSchema) as (args: unknown, extra: unknown) => Promise<{ content: unknown[] }>;
 
         // Call with override (should use override, not active account)
-        await Promise.all([wrappedHandler({}, { _meta: { accountId: testAccountId } }), wrappedHandler({}, { _meta: { accountId: testAccountId } }), wrappedHandler({}, { _meta: { accountId: testAccountId } })]);
+        await Promise.all([wrappedHandler({}, { mcpReq: { _meta: { accountId: testAccountId } } }), wrappedHandler({}, { mcpReq: { _meta: { accountId: testAccountId } } }), wrappedHandler({}, { mcpReq: { _meta: { accountId: testAccountId } } })]);
 
         // Verify all overrides were applied
         assert.equal(capturedAccounts.length, 3, 'Should have 3 results');
@@ -338,7 +337,7 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
         // Create middleware for non-existent account
         const invalidWithAuth = invalidAuthProvider.authMiddleware();
 
-        const testHandler = async (_args: unknown, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => {
+        const testHandler = async (_args: unknown, extra: ServerContext) => {
           // Trigger API call to force token lookup (which will throw AuthRequiredError)
           const auth = (
             extra as {

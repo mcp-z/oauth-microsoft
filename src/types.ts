@@ -7,15 +7,14 @@
 // Public types (will be re-exported)
 // Internal-only types (not re-exported, used by providers)
 import type { AuthFlowDescriptor, CachedToken, DcrClientInformation, DcrClientMetadata, Logger, OAuth2TokenStorageProvider, ProviderTokens, ToolHandler, ToolModule, UserAuthProvider } from '@mcp-z/oauth';
-import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
-import type { ServerNotification, ServerRequest } from '@modelcontextprotocol/sdk/types.js';
+import type { ServerContext } from '@modelcontextprotocol/server';
 import type { Keyv } from 'keyv';
 
 // Re-export error class
 export { AuthRequiredError } from '@mcp-z/oauth';
 // Re-export only essential shared types for public API
 // Make internal types available for internal use without exporting
-export type { AuthFlowDescriptor, CachedToken, DcrClientInformation, DcrClientMetadata, Logger, OAuth2TokenStorageProvider, ProviderTokens, RequestHandlerExtra, ServerNotification, ServerRequest, ToolHandler, ToolModule, UserAuthProvider };
+export type { AuthFlowDescriptor, CachedToken, DcrClientInformation, DcrClientMetadata, Logger, OAuth2TokenStorageProvider, ProviderTokens, ServerContext, ToolHandler, ToolModule, UserAuthProvider };
 
 // ============================================================================
 // Core Authentication Types
@@ -149,10 +148,10 @@ export interface AuthContext {
 
 /**
  * Enriched extra with guaranteed auth context and logger
- * Handlers receive this type - never plain RequestHandlerExtra
+ * Handlers receive this type - never plain ServerContext
  * @public
  */
-export interface EnrichedExtra extends RequestHandlerExtra<ServerRequest, ServerNotification> {
+export interface EnrichedExtra extends ServerContext {
   /**
    * Auth context injected by middleware
    * GUARANTEED to exist (middleware catches auth failures)
@@ -170,12 +169,6 @@ export interface EnrichedExtra extends RequestHandlerExtra<ServerRequest, Server
    * Optional - present when using HTTP transport with JWT/session auth
    */
   req?: unknown;
-
-  // Preserve backchannel support
-  _meta?: {
-    accountId?: string;
-    [key: string]: unknown;
-  };
 }
 
 // ============================================================================
