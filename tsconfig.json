@@ -4,6 +4,13 @@
     "outDir": "dist",
     "types": ["node", "mocha"]
   },
+  "typedocOptions": {
+    "externalSymbolLinkMappings": {
+      "@mcp-z/oauth": {
+        "AuthMiddlewareWrapper": "#"
+      }
+    }
+  },
   "include": ["src/**/*", "test/**/*"],
   "exclude": ["node_modules/**/*"]
 }

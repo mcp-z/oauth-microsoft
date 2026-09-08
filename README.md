@@ -7,7 +7,7 @@ OAuth 2.0 client for Microsoft Graph with multi-account support, PKCE security, 
 - Outlook OAuth in MCP servers
 - CLI and desktop OAuth flows
 - Device code auth for headless environments
-- DCR (self-hosted) for shared HTTP servers
+- CIMD and DCR (self-hosted) for shared HTTP servers
 
 ## Install
 
@@ -67,7 +67,7 @@ const provider = new DeviceCodeProvider({
 
 ### DCR (self-hosted)
 
-Use `DcrOAuthProvider` for bearer validation and `createDcrRouter` to host the DCR endpoints.
+Use `DcrOAuthProvider` for bearer validation and `createDcrRouter` to host the DCR endpoints and accept CIMD clients. CIMD resolution uses the secure shared resolver by default. A custom `cimdResolver` can be supplied for an explicit local-development policy; production deployments should additionally use an egress proxy.
 
 ```ts
 import { DcrOAuthProvider, createDcrRouter } from '@mcp-z/oauth-microsoft';
@@ -89,6 +89,15 @@ const router = createDcrRouter({
     clientSecret: process.env.MS_CLIENT_SECRET!
   }
 });
+```
+
+For local development, configure the resolver explicitly with its loopback and HTTP opt-ins:
+
+```ts
+import { createCimdResolver } from '@mcp-z/oauth';
+import { createDcrRouter } from '@mcp-z/oauth-microsoft';
+
+const router = createDcrRouter({ ...config, cimdResolver: createCimdResolver({ allowHttpLoopback: true }) });
 ```
 
 ## Config helpers
