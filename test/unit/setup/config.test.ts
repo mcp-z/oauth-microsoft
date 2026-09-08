@@ -1,5 +1,4 @@
 import '../../lib/env-loader.ts';
-
 import { type DcrConfig, type OAuthConfig, parseConfig, parseDcrConfig } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 
