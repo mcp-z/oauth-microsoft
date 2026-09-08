@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.2.0] - 2026-09-07
+
+### Added
+
+- Self-hosted authorization servers now support Client ID Metadata Documents alongside Dynamic Client Registration. Public CIMD clients can complete authorization-code exchanges with PKCE and refresh-token exchanges without a client secret, while DCR clients retain their existing credential flow.
+
 ## [2.1.0] - 2026-09-07
 
 ### Added

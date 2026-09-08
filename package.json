@@ -11,6 +11,8 @@
     "azure-ad",
     "msal-alternative",
     "pkce",
+    "cimd",
+    "client-id-metadata",
     "graph-api",
     "token-storage"
   ],
@@ -49,7 +51,7 @@
     "version": "tsds version"
   },
   "dependencies": {
-    "@mcp-z/oauth": "^2.0.0",
+    "@mcp-z/oauth": "^2.1.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "express": "^5.0.0",
     "zod": "^4.2.0"
