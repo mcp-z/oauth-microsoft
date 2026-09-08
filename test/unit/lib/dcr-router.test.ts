@@ -1,4 +1,5 @@
 import '../../lib/env-loader.ts';
+import { createCimdResolver } from '@mcp-z/oauth';
 import { createDcrRouter } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import { createHash } from 'crypto';
@@ -602,6 +603,211 @@ describe('unit/dcr-router-iss', () => {
       } finally {
         globalThis.fetch = realFetch;
       }
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe('unit/dcr-router-cimd', () => {
+  const setup = async (cimdResolver = createCimdResolver()) => {
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+    const store = new Keyv();
+    app.use(
+      '/',
+      createDcrRouter({
+        store,
+        issuerUrl: baseUrl,
+        baseUrl,
+        scopesSupported: ['openid'],
+        clientConfig: { clientId: 'test-ms-client-id' },
+        cimdResolver,
+      })
+    );
+    return { baseUrl, store, server: app.listen(port) };
+  };
+
+  const authorizeUrl = (baseUrl: string, clientId: string, redirectUri: string) => {
+    const url = new URL(`${baseUrl}/oauth/authorize`);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('code_challenge', createHash('sha256').update('cimd-verifier').digest('base64url'));
+    url.searchParams.set('code_challenge_method', 'S256');
+    return url;
+  };
+
+  it('advertises CIMD while retaining DCR registration', async () => {
+    const { baseUrl, server } = await setup();
+    try {
+      const metadata = (await (await fetch(`${baseUrl}/.well-known/oauth-authorization-server`)).json()) as {
+        client_id_metadata_document_supported?: boolean;
+        registration_endpoint?: string;
+        token_endpoint_auth_methods_supported?: string[];
+      };
+      assert.strictEqual(metadata.client_id_metadata_document_supported, true);
+      assert.strictEqual(metadata.registration_endpoint, `${baseUrl}/oauth/register`);
+      assert.ok(metadata.token_endpoint_auth_methods_supported?.includes('none'));
+    } finally {
+      server.close();
+    }
+  });
+
+  it('resolves a CIMD client and validates its exact redirect URI', async () => {
+    const documentPort = await getPort();
+    const documentApp = express();
+    const redirectUri = 'http://localhost:9999/callback';
+    const clientId = `http://127.0.0.1:${documentPort}/client.json`;
+    documentApp.get('/client.json', (_req, res) => res.json({ client_id: clientId, client_name: 'Local CIMD client', redirect_uris: [redirectUri] }));
+    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
+    const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
+    try {
+      const response = await fetch(authorizeUrl(baseUrl, clientId, redirectUri), { redirect: 'manual' });
+      assert.strictEqual(response.status, 302);
+      assert.ok(response.headers.get('location')?.startsWith('https://login.microsoftonline.com/'));
+
+      const refused = await fetch(authorizeUrl(baseUrl, clientId, `${redirectUri}/wrong`), { redirect: 'manual' });
+      assert.strictEqual(refused.status, 400);
+      assert.strictEqual(((await refused.json()) as { error?: string }).error, 'invalid_request');
+    } finally {
+      server.close();
+      documentServer.close();
+    }
+  });
+
+  it('prefers stored registrations for opaque and URL-shaped client IDs', async () => {
+    const clientId = 'dcr_opaque-client';
+    const registeredUrlClientId = 'https://registered.example/client.json';
+    const redirectUri = 'http://localhost:9999/callback';
+    const { baseUrl, store, server } = await setup();
+    await store.set(`dcr:client:${clientId}`, {
+      client_id: clientId,
+      client_secret: 'dcr-secret',
+      redirect_uris: [redirectUri],
+    });
+    await store.set(`dcr:client:${registeredUrlClientId}`, {
+      client_id: registeredUrlClientId,
+      client_secret: 'dcr-secret',
+      redirect_uris: [redirectUri],
+    });
+    try {
+      const response = await fetch(authorizeUrl(baseUrl, clientId, redirectUri), { redirect: 'manual' });
+      assert.strictEqual(response.status, 302);
+      const registeredUrl = await fetch(authorizeUrl(baseUrl, registeredUrlClientId, redirectUri), { redirect: 'manual' });
+      assert.strictEqual(registeredUrl.status, 302);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('returns a generic invalid_client for CIMD resolution failures', async () => {
+    const leaked = 'internal-hostname.example: secret-token';
+    const documentPort = await getPort();
+    const documentApp = express();
+    documentApp.get('/client.json', (_req, res) => res.status(502).send(leaked));
+    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
+    const clientId = `http://127.0.0.1:${documentPort}/client.json`;
+    const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
+    try {
+      const response = await fetch(authorizeUrl(baseUrl, clientId, 'http://localhost:9999/callback'), { redirect: 'manual' });
+      assert.strictEqual(response.status, 400);
+      const body = await response.text();
+      assert.ok(!body.includes(leaked));
+      assert.deepStrictEqual(JSON.parse(body), { error: 'invalid_client', error_description: 'Unknown client_id' });
+    } finally {
+      server.close();
+      documentServer.close();
+    }
+  });
+
+  it('rejects malformed URL-shaped client IDs without fetching them', async () => {
+    const clientId = 'https://user:password@example.com/client.json';
+    const { baseUrl, server } = await setup();
+    try {
+      const response = await fetch(authorizeUrl(baseUrl, clientId, 'http://localhost:9999/callback'), { redirect: 'manual' });
+      assert.strictEqual(response.status, 400);
+      assert.deepStrictEqual(await response.json(), { error: 'invalid_client', error_description: 'Unknown client_id' });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('redeems CIMD authorization codes without a secret but with PKCE binding', async () => {
+    const clientId = 'https://client.example/metadata.json';
+    const redirectUri = 'http://localhost:9999/callback';
+    const { baseUrl, store, server } = await setup();
+    try {
+      const code = 'cimd-auth-code';
+      await store.set(`dcr:authcode:${code}`, {
+        code,
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope: 'openid',
+        client_type: 'cimd',
+        code_challenge: createHash('sha256').update('cimd-verifier').digest('base64url'),
+        code_challenge_method: 'S256',
+        providerTokens: { accessToken: 'provider-access', expiresAt: Date.now() + 3600000 },
+        created_at: Date.now(),
+        expires_at: Date.now() + 600000,
+      });
+      const withSecret = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, client_secret: 'unexpected', redirect_uri: redirectUri, code_verifier: 'cimd-verifier' }),
+      });
+      assert.strictEqual(withSecret.status, 401);
+      const response = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, redirect_uri: redirectUri, code_verifier: 'cimd-verifier' }),
+      });
+      assert.strictEqual(response.status, 200);
+      assert.ok(((await response.json()) as { access_token?: string }).access_token);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('binds CIMD refresh tokens to the marked client ID without a secret', async () => {
+    const clientId = 'https://client.example/metadata.json';
+    const refreshToken = 'cimd-refresh-token';
+    const { baseUrl, store, server } = await setup();
+    try {
+      await store.set(`dcr:refresh:${refreshToken}`, {
+        access_token: 'old-access-token',
+        token_type: 'Bearer',
+        expires_in: 3600,
+        refresh_token: refreshToken,
+        scope: 'openid',
+        client_id: clientId,
+        client_type: 'cimd',
+        providerTokens: { accessToken: 'provider-access' },
+        created_at: Date.now(),
+      });
+
+      const withSecret = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: 'unexpected' }),
+      });
+      assert.strictEqual(withSecret.status, 401);
+      const response = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId }),
+      });
+      assert.strictEqual(response.status, 200);
+      assert.ok(((await response.json()) as { access_token?: string }).access_token);
+
+      const wrongClient = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: 'https://other.example/client.json' }),
+      });
+      assert.strictEqual(wrongClient.status, 400);
+      assert.strictEqual(((await wrongClient.json()) as { error?: string }).error, 'invalid_grant');
     } finally {
       server.close();
     }

@@ -205,6 +205,8 @@ export interface AuthorizationCode {
   scope: string;
   code_challenge?: string;
   code_challenge_method?: string;
+  /** Set for CIMD public clients; absent for DCR registrations. */
+  client_type?: 'cimd';
   /** Microsoft provider tokens obtained during authorization */
   providerTokens: ProviderTokens;
   created_at: number;
@@ -222,6 +224,8 @@ export interface AccessToken {
   refresh_token?: string;
   scope: string;
   client_id: string;
+  /** Set for CIMD public clients; absent for DCR registrations. */
+  client_type?: 'cimd';
   /** Microsoft provider tokens */
   providerTokens: ProviderTokens;
   created_at: number;
