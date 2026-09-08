@@ -149,6 +149,15 @@ export interface AuthContext {
 /**
  * Enriched extra with guaranteed auth context and logger
  * Handlers receive this type - never plain ServerContext
+ *
+ * Extending `ServerContext` is deliberate: this is middleware, so it adds to the
+ * SDK's request context rather than replacing it. A handler is still an SDK
+ * handler and may need what the SDK put there - `signal` to honour cancellation,
+ * `mcpReq._meta.progressToken` and notifications to report progress, `mcpReq.id`
+ * to correlate logs. Narrowing this to `{ authContext, logger }` would read as a
+ * simplification, because the servers in this workspace happen to use none of it,
+ * and would silently remove those capabilities from every other consumer.
+ *
  * @public
  */
 export interface EnrichedExtra extends ServerContext {

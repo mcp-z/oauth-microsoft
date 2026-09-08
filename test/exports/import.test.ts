@@ -1,3 +1,4 @@
+import '../lib/env-loader.ts';
 import { createConfig, createDcrRouter, createLoopbackCallbackRouter, parseConfig, parseDcrConfig, verifyBearerToken } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 

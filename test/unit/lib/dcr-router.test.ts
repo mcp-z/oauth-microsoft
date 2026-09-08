@@ -1,3 +1,4 @@
+import '../../lib/env-loader.ts';
 import { createDcrRouter } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import express from 'express';
@@ -33,6 +34,43 @@ describe('unit/dcr-router-auth-challenge', () => {
 
       const payload = (await response.json()) as { error?: { code?: number } };
       assert.strictEqual(payload.error?.code, -32600);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe('unit/dcr-router-protected-resource-metadata', () => {
+  // Both RFC 9728 documents describe one protected resource, so both must name
+  // it identically. They did not: the root document answered `baseUrl`, which
+  // is the deployment root and not a protected resource at all. A client reading
+  // that one audience-binds its token (RFC 8707) to the wrong identifier, and an
+  // authorization server that validates the indicator rejects it.
+  it('names the MCP endpoint identically at the root and sub-path locations', async () => {
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+
+    app.use(
+      '/',
+      createDcrRouter({
+        store: new Keyv(),
+        issuerUrl: baseUrl,
+        baseUrl,
+        scopesSupported: ['read'],
+        clientConfig: { clientId: 'test-client-id' },
+      })
+    );
+
+    const server = app.listen(port);
+    try {
+      const read = async (path: string) => (await (await fetch(`${baseUrl}${path}`)).json()) as { resource?: string };
+      const root = await read('/.well-known/oauth-protected-resource');
+      const subPath = await read('/.well-known/oauth-protected-resource/mcp');
+
+      assert.strictEqual(root.resource, `${baseUrl}/mcp`, 'root document must name the MCP endpoint');
+      assert.strictEqual(subPath.resource, `${baseUrl}/mcp`);
+      assert.strictEqual(root.resource, subPath.resource, 'one resource, one identifier');
     } finally {
       server.close();
     }
