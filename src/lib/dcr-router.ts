@@ -98,6 +98,10 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       grant_types_supported: ['authorization_code', 'refresh_token'],
       token_endpoint_auth_methods_supported: ['client_secret_basic', 'client_secret_post'],
       code_challenge_methods_supported: ['S256'],
+      // RFC 9207: a client that sees this flag must treat an authorization response
+      // without `iss` as a failure, so the callback redirect below always carries it.
+      // Advertising and emitting must move together.
+      authorization_response_iss_parameter_supported: true,
       service_documentation: `${baseUrl}/docs`,
     };
     res.json(metadata);
@@ -174,12 +178,20 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       });
     }
 
-    // PKCE downgrade guard (RFC 7636). 'plain' sends the verifier in the clear on the
-    // authorization request, so anyone who observes it can replay the code. RFC 7636 s4.3
-    // makes 'plain' the default when the method is omitted, so an absent method is the same
-    // downgrade spelled differently - both are refused here rather than at the token
-    // endpoint, so the client fails before the browser round trip instead of after it.
-    if (code_challenge !== undefined && code_challenge_method !== 'S256') {
+    // PKCE is required (RFC 7636). A code minted without a code_challenge has no
+    // proof-of-possession binding, so the challenge is mandatory rather than
+    // validated only when present. 'plain' sends the verifier in the clear, and
+    // RFC 7636 s4.3 makes 'plain' the default when the method is omitted, so an
+    // absent method is the same downgrade spelled differently - all are refused
+    // here rather than at the token endpoint, so the client fails before the
+    // browser round trip instead of after it.
+    if (typeof code_challenge !== 'string') {
+      return res.status(400).json({
+        error: 'invalid_request',
+        error_description: 'code_challenge is required',
+      });
+    }
+    if (code_challenge_method !== 'S256') {
       return res.status(400).json({
         error: 'invalid_request',
         error_description: 'Only code_challenge_method=S256 is supported',
@@ -353,6 +365,10 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       // Redirect back to MCP client with DCR authorization code
       const clientRedirectUrl = new URL(dcrRequestState.redirect_uri);
       clientRedirectUrl.searchParams.set('code', dcrCode);
+      // RFC 9207: the client compares this against the `issuer` in the discovered
+      // metadata, so it must be the issuer the metadata advertises, not baseUrl,
+      // if the two ever differ.
+      clientRedirectUrl.searchParams.set('iss', issuerUrl);
       if (dcrRequestState.state) {
         clientRedirectUrl.searchParams.set('state', dcrRequestState.state);
       }
@@ -438,32 +454,40 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
         });
       }
 
-      // Validate PKCE if used
-      if (authCode.code_challenge) {
-        if (!code_verifier) {
-          return res.status(400).json({
-            error: 'invalid_request',
-            error_description: 'code_verifier is required for PKCE',
-          });
-        }
+      // PKCE is required, so verification is unconditional. The authorize endpoint
+      // refuses to mint a code without a challenge, so a stored code that lacks one
+      // predates that guard and carries no proof-of-possession binding - it must not
+      // be redeemable.
+      if (!authCode.code_challenge) {
+        return res.status(400).json({
+          error: 'invalid_grant',
+          error_description: 'Authorization code was not issued with a code_challenge',
+        });
+      }
 
-        // Validate code_verifier against code_challenge
-        // S256 only - the authorize endpoint refuses anything else, so a stored challenge
-        // with another method predates that guard and must not be honored.
-        if (authCode.code_challenge_method !== 'S256') {
-          return res.status(400).json({
-            error: 'invalid_grant',
-            error_description: 'Only code_challenge_method=S256 is supported',
-          });
-        }
-        const computedChallenge = createHash('sha256').update(code_verifier).digest('base64url');
+      if (!code_verifier) {
+        return res.status(400).json({
+          error: 'invalid_request',
+          error_description: 'code_verifier is required',
+        });
+      }
 
-        if (computedChallenge !== authCode.code_challenge) {
-          return res.status(400).json({
-            error: 'invalid_grant',
-            error_description: 'Invalid code_verifier',
-          });
-        }
+      // S256 only - the authorize endpoint refuses anything else, so a stored challenge
+      // with another method predates that guard and must not be honored.
+      if (authCode.code_challenge_method !== 'S256') {
+        return res.status(400).json({
+          error: 'invalid_grant',
+          error_description: 'Only code_challenge_method=S256 is supported',
+        });
+      }
+
+      const computedChallenge = createHash('sha256').update(code_verifier).digest('base64url');
+
+      if (computedChallenge !== authCode.code_challenge) {
+        return res.status(400).json({
+          error: 'invalid_grant',
+          error_description: 'Invalid code_verifier',
+        });
       }
 
       // Delete authorization code (one-time use)
