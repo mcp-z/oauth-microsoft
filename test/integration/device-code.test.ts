@@ -11,6 +11,7 @@
  * 4. Test token caching and middleware injection
  */
 
+import '../lib/env-loader.ts';
 import type { ToolModule } from '@mcp-z/oauth';
 import { DeviceCodeProvider } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';

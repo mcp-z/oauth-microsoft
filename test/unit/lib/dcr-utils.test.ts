@@ -4,6 +4,7 @@
  * DCR client registration (RFC 7591) and provider token storage.
  */
 
+import '../../lib/env-loader.ts';
 import type { DcrClientMetadata, ProviderTokens } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import Keyv from 'keyv';

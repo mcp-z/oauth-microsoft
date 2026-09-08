@@ -1,5 +1,3 @@
-import '../../lib/env-loader.ts';
-
 /**
  * DeviceCodeProvider Tests
  *
@@ -13,6 +11,7 @@ import '../../lib/env-loader.ts';
  * Requires valid test OAuth tokens (run npm run test:setup first)
  */
 
+import '../../lib/env-loader.ts';
 import { createAccountKey } from '@mcp-z/oauth';
 import { DeviceCodeProvider, type EnrichedExtra, type ToolModule } from '@mcp-z/oauth-microsoft';
 import type { CallToolResult } from '@modelcontextprotocol/server';

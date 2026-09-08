@@ -109,7 +109,12 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
    */
   router.get('/.well-known/oauth-protected-resource', (_req: Request, res: Response) => {
     const metadata: RFC9728Metadata = {
-      resource: baseUrl,
+      // The protected resource is the MCP endpoint, so both documents name it.
+      // They disagreed once - this one answered `baseUrl` - and a client that
+      // read this one came away with an identifier for something that is not a
+      // protected resource. RFC 8707 audience-binds a token to whatever this
+      // says, so the two must agree or a token is bound to the wrong thing.
+      resource: `${baseUrl}/mcp`,
       authorization_servers: [baseUrl],
       scopes_supported: scopesSupported,
       bearer_methods_supported: ['header'],

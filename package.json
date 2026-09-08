@@ -45,7 +45,7 @@
     "prepublishOnly": "node scripts/require-dist-tag.cjs && tsds validate",
     "test": "tsds test:node --no-timeouts",
     "test:engines": "nvu engines tsds test:node --no-timeouts",
-    "test:setup": "node --env-file=.env.test test/lib/setup-token.ts",
+    "test:setup": "node test/lib/setup-token.ts",
     "version": "tsds version"
   },
   "dependencies": {
@@ -63,7 +63,6 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.2.0",
     "cors": "^2.0.0",
-    "dotenv": "^17.2.3",
     "get-port": "5.1.1",
     "keyv": "^5.0.0",
     "keyv-file": "5.3.3",

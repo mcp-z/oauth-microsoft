@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.2] - 2026-09-07
+
+### Fixed
+
+- The RFC 9728 protected-resource metadata at `/.well-known/oauth-protected-resource` named `baseUrl` as the `resource`, while the document at `/.well-known/oauth-protected-resource/mcp` named `${baseUrl}/mcp`. Two documents describing one protected resource gave it two different identifiers, and the root one named the deployment root — which is not a protected resource. A client that read it would audience-bind its token (RFC 8707) to the wrong identifier. Both documents now name the MCP endpoint.
+
+## [2.0.1] - 2026-09-06
+
+### Fixed
+
+- An abandoned interactive OAuth flow no longer keeps the host process alive. The loopback callback server and its five-minute timeout are now unreferenced, so a headless caller that never completes the flow, or a user who closes the browser, does not hold the process open waiting.
+
 ## [2.0.0] - 2026-09-06
 
 ### Changed

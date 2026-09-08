@@ -10,6 +10,7 @@
  *   npm run test:setup
  */
 
+import './env-loader.ts';
 import { getToken } from '@mcp-z/oauth';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';

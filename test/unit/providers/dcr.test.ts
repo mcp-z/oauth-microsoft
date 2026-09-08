@@ -1,5 +1,3 @@
-import '../../lib/env-loader.ts';
-
 /**
  * DcrOAuthProvider Tests
  *
@@ -8,6 +6,7 @@ import '../../lib/env-loader.ts';
  * bearer token extraction, token verification, auth context enrichment, and error handling.
  */
 
+import '../../lib/env-loader.ts';
 import type { ProviderTokens } from '@mcp-z/oauth';
 import { DcrOAuthProvider, type DcrOAuthProviderConfig, type EnrichedExtra, type ToolModule } from '@mcp-z/oauth-microsoft';
 import type { CallToolResult } from '@modelcontextprotocol/server';

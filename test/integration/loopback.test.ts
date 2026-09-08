@@ -1,5 +1,3 @@
-import '../lib/env-loader.ts';
-
 /**
  * LoopbackOAuthProvider Integration Tests (Microsoft)
  *
@@ -11,6 +9,7 @@ import '../lib/env-loader.ts';
  * Requires valid test OAuth tokens (run npm run test:setup first).
  */
 
+import '../lib/env-loader.ts';
 import type { ToolModule } from '@mcp-z/oauth';
 import { LoopbackOAuthProvider } from '@mcp-z/oauth-microsoft';
 import { Client } from '@microsoft/microsoft-graph-client';

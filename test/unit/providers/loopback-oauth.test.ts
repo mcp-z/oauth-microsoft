@@ -1,5 +1,3 @@
-import '../../lib/env-loader.ts';
-
 /**
  * LoopbackOAuthProvider Tests
  *
@@ -10,6 +8,7 @@ import '../../lib/env-loader.ts';
  * Security Model: Server manages tokens, uses ephemeral loopback server for OAuth callbacks
  */
 
+import '../../lib/env-loader.ts';
 import { addAccount, type CachedToken, createAccountKey, createServiceKey, getActiveAccount, getToken, removeAccount, setActiveAccount } from '@mcp-z/oauth';
 import { AuthRequiredError, type EnrichedExtra, LoopbackOAuthProvider, type ToolModule } from '@mcp-z/oauth-microsoft';
 import type { CallToolResult } from '@modelcontextprotocol/server';

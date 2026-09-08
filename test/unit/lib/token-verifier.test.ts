@@ -5,6 +5,7 @@
  * in isolation without a full DCR router setup.
  */
 
+import '../../lib/env-loader.ts';
 import type { AuthInfo } from '@mcp-z/oauth-microsoft';
 import { DcrTokenVerifier } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
