@@ -12,7 +12,7 @@ OAuth 2.0 client for Microsoft Graph with multi-account support, PKCE security, 
 ## Install
 
 ```bash
-npm install @mcp-z/oauth-microsoft keyv
+npm install @mcp-z/oauth-microsoft keyv keyv-file
 ```
 
 ## Create a Microsoft app
@@ -22,10 +22,10 @@ npm install @mcp-z/oauth-microsoft keyv
 3. Click New registration.
 4. Choose a name and select a supported account type.
 5. Copy the Application (client) ID and Directory (tenant) ID.
-6. Select your MCP transport (stdio for local and http for remote) and platform
-- For stdio, choose "Authentication", + Add Redirect URI, "Mobile and desktop applications" platform 
-- For http, choose "Authentication", + Add Redirect URI, "Web" platform, add your URL (default is http://localhost:3000/oauth/callback based on the --port or PORT)
-- For local hosting, add "http://localhost" for [Ephemeral redirect URL](https://en.wikipedia.org/wiki/Ephemeral_port)
+6. Select the credential platform that matches your deployment:
+   - For a local stdio client, choose "Mobile and desktop applications" under Authentication and add the loopback redirect URI.
+   - For an HTTP server, choose "Web" and add its public `/oauth/callback` URL. Local HTTP uses the port configured by the server.
+   - For local hosting, add `http://localhost` for the [ephemeral redirect URL](https://en.wikipedia.org/wiki/Ephemeral_port).
 
 ## OAuth modes
 
@@ -47,6 +47,9 @@ const provider = new LoopbackOAuthProvider({
   scope: 'https://graph.microsoft.com/Mail.Read offline_access',
   tokenStore: new Keyv({ store: new KeyvFile({ filename: '.tokens/microsoft.json' }) })
 });
+
+const accessToken = await provider.getAccessToken();
+// Opens the browser for consent when no valid token is stored, then returns a token.
 ```
 
 ### Device code (headless)
@@ -63,6 +66,9 @@ const provider = new DeviceCodeProvider({
   scope: 'https://graph.microsoft.com/Mail.Read offline_access',
   tokenStore: new Keyv({ store: new KeyvFile({ filename: '.tokens/microsoft.json' }) })
 });
+
+const accessToken = await provider.getAccessToken();
+// Prints a device code and verification URL for headless sign-in when needed.
 ```
 
 ### DCR (self-hosted)
@@ -111,8 +117,8 @@ Use `parseConfig()` and `parseDcrConfig()` to load CLI + env settings for server
 
 ## Requirements
 
-- Node.js >= 22
+- Node.js >= 18
 
-### Documentation
+## Documentation
 
 [API Docs](https://mcp-z.github.io/oauth-microsoft)
