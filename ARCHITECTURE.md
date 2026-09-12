@@ -291,11 +291,11 @@ async function handler(args: In, extra: EnrichedExtra): Promise<CallToolResult> 
       structuredContent: result,
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw new McpError(ErrorCode.InternalError, `Error: ${message}`, {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, `Error: ${message}`, {
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
@@ -348,11 +348,11 @@ registerTools(mcpServer, tools.map(middleware.withToolAuth));  // Auth middlewar
 
 ### Error Handling Pattern
 
-**Current Standard**: All errors use McpError from the MCP SDK.
+**Current Standard**: All errors use `ProtocolError` from `@mcp-z/server`, which re-exports it from the v2 MCP SDK so this package never imports the SDK directly. It was named `McpError` on the v1 SDK, and `ErrorCode` was named `ProtocolErrorCode`; the wire codes are unchanged.
 
 **Tool Definition**:
 ```typescript
-import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { ProtocolError, ProtocolErrorCode } from '@mcp-z/server';
 
 const config = {
   inputSchema: z.object({ id: z.string().min(1) }) as const,
@@ -383,14 +383,14 @@ async function handler(args: In, extra: EnrichedExtra): Promise<CallToolResult> 
       structuredContent: result,
     };
   } catch (error) {
-    // Re-throw McpError as-is
-    if (error instanceof McpError) {
+    // Re-throw ProtocolError as-is
+    if (error instanceof ProtocolError) {
       throw error;
     }
 
-    // Wrap other errors in McpError
+    // Wrap other errors in ProtocolError
     const message = error instanceof Error ? error.message : String(error);
-    throw new McpError(ErrorCode.InternalError, `Error: ${message}`, {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, `Error: ${message}`, {
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
@@ -739,11 +739,11 @@ async function handler(args, extra: EnrichedExtra) {
       structuredContent: result,
     };
   } catch (error) {
-    if (error instanceof McpError) {
+    if (error instanceof ProtocolError) {
       throw error;
     }
     const message = error instanceof Error ? error.message : String(error);
-    throw new McpError(ErrorCode.InternalError, `Error: ${message}`, {
+    throw new ProtocolError(ProtocolErrorCode.InternalError, `Error: ${message}`, {
       stack: error instanceof Error ? error.stack : undefined,
     });
   }
