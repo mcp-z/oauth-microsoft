@@ -589,8 +589,12 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       });
     });
 
+    // Don't let a pending callback that never arrives (headless descriptor callers, or a user who
+    // abandons the browser flow) keep the host process alive on its own for up to 5 minutes.
+    server?.unref();
+
     // Timeout after 5 minutes (match middleware polling timeout)
-    setTimeout(() => {
+    const timeoutHandle = setTimeout(() => {
       if (server) {
         server.close();
         // Best-effort cleanup if user never completes flow:
@@ -598,6 +602,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         void tokenStore.delete(this.pendingKey(stateId));
       }
     }, OAUTH_TIMEOUT_MS);
+    timeoutHandle.unref();
 
     // Build auth URL - SAME helper as persistent mode
     const authUrl = this.buildAuthUrl({

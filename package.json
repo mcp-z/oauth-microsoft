@@ -55,7 +55,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@mcp-z/client": "^1.0.11",
+    "@mcp-z/client": "^2.0.0",
     "@microsoft/microsoft-graph-client": "^3.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@types/cors": "^2.8.19",
