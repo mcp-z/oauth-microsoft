@@ -14,6 +14,7 @@
 
 import { createAccountKey } from '@mcp-z/oauth';
 import type Keyv from 'keyv';
+import { createRefreshedToken } from '../../src/lib/create-refreshed-token.ts';
 
 /**
  * Cached token format matching LoopbackOAuthProvider
@@ -88,12 +89,7 @@ export async function refreshMicrosoftToken(refreshToken: string, clientId: stri
 
   const tokenResponse = (await response.json()) as TokenResponse;
 
-  return {
-    accessToken: tokenResponse.access_token,
-    refreshToken: refreshToken, // Keep original refresh token (Microsoft may not return new one)
-    ...(tokenResponse.expires_in !== undefined && { expiresAt: Date.now() + tokenResponse.expires_in * 1000 }),
-    ...(tokenResponse.scope !== undefined && { scope: tokenResponse.scope }),
-  };
+  return createRefreshedToken(tokenResponse, refreshToken);
 }
 
 /**

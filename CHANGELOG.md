@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.2] - 2026-09-20
+
+### Fixed
+
+- The setup and DCR configuration parsers now work on Node.js 18, the declared runtime minimum.
+- Refresh flows now retain replacement provider refresh tokens and persist updated DCR credentials. Failed refreshes surface to callers instead of reusing stale tokens or starting an interactive flow in headless mode.
+
 ## [2.2.0] - 2026-09-07
 
 ### Added

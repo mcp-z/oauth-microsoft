@@ -28,6 +28,7 @@
 import { addAccount, generatePKCE, getActiveAccount, getErrorTemplate, getSuccessTemplate, getToken, type OAuth2TokenStorageProvider, openUrl, setAccountInfo, setActiveAccount, setToken } from '@mcp-z/oauth';
 import { randomUUID } from 'crypto';
 import * as http from 'http';
+import { createRefreshedToken } from '../lib/create-refreshed-token.ts';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import { type AuthContext, type AuthFlowDescriptor, AuthRequiredError, type CachedToken, type EnrichedExtra, type LoopbackOAuthConfig } from '../types.ts';
 
@@ -101,6 +102,9 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
           await setToken(tokenStore, { accountId: effectiveAccountId, service }, refreshedToken);
           return refreshedToken.accessToken;
         } catch (error) {
+          if (this.config.headless) {
+            throw new Error(`Token refresh failed in headless mode: ${error instanceof Error ? error.message : String(error)}`);
+          }
           logger.info('Token refresh failed, starting new OAuth flow', {
             accountId: effectiveAccountId,
             error: error instanceof Error ? error.message : String(error),
@@ -690,12 +694,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
     const tokenResponse = (await response.json()) as TokenResponse;
 
-    return {
-      accessToken: tokenResponse.access_token,
-      refreshToken: refreshToken, // Keep original refresh token
-      ...(tokenResponse.expires_in !== undefined && { expiresAt: Date.now() + tokenResponse.expires_in * 1000 }),
-      ...(tokenResponse.scope !== undefined && { scope: tokenResponse.scope }),
-    };
+    return createRefreshedToken(tokenResponse, refreshToken);
   }
 
   /**

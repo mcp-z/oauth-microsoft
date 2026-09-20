@@ -195,11 +195,16 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
       providerExpiresAt: number;
     }
 
-    const storedTokens = (await dcrStore.get('microsoft')) as DcrTokenData | undefined;
+    let storedTokens: DcrTokenData | undefined;
+    try {
+      storedTokens = (await dcrStore.get('microsoft')) as DcrTokenData | undefined;
+    } finally {
+      await dcrStore.disconnect();
+    }
     assert.ok(storedTokens, 'No stored DCR tokens - run the DCR flow first');
 
-    const clientId = process.env.MS_CLIENT_ID;
-    assert.ok(clientId, 'MS_CLIENT_ID must be set');
+    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    assert.ok(clientId, 'MS_TEST_DCR_CLIENT_ID must be set');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
@@ -215,9 +220,23 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     console.log('🔄 Refreshing tokens with real Microsoft endpoint...');
     const refreshedTokens = await realProvider.refreshAccessToken(storedTokens.providerRefreshToken);
 
+    const updatedDcrStore = new Keyv({ store: new KeyvFile({ filename: dcrTokenPath }) });
+    try {
+      const latest = (await updatedDcrStore.get('microsoft')) as DcrTokenData | undefined;
+      if (!latest) throw new Error('Stored Microsoft DCR credentials disappeared during refresh');
+      await updatedDcrStore.set('microsoft', {
+        ...latest,
+        providerAccessToken: refreshedTokens.accessToken,
+        providerRefreshToken: refreshedTokens.refreshToken ?? latest.providerRefreshToken,
+        providerExpiresAt: refreshedTokens.expiresAt ?? latest.providerExpiresAt,
+      });
+    } finally {
+      await updatedDcrStore.disconnect();
+    }
+
     assert.ok(refreshedTokens.accessToken, 'Should return new access token');
     assert.ok(refreshedTokens.accessToken !== storedTokens.providerAccessToken || refreshedTokens.expiresAt, 'Should have new token or fresh expiry');
-    console.log(`✅ Refreshed token: ${refreshedTokens.accessToken.substring(0, 20)}...`);
+    console.log('✅ Refreshed token received');
 
     // Verify the refreshed token works by calling getUserEmail
     console.log('🔍 Verifying refreshed token with Microsoft Graph API...');
@@ -230,8 +249,8 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
   it('should fail refresh with invalid token', async function () {
     this.timeout(10000);
 
-    const clientId = process.env.MS_CLIENT_ID;
-    assert.ok(clientId, 'MS_CLIENT_ID must be set');
+    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    assert.ok(clientId, 'MS_TEST_DCR_CLIENT_ID must be set');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
