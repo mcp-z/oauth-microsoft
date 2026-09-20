@@ -170,6 +170,45 @@ export async function setProviderTokens(store: Keyv, dcrToken: string, tokens: P
 }
 
 /**
+ * Persist provider tokens refreshed while verifying a DCR access token.
+ *
+ * @param store - Keyv store for all DCR data
+ * @param tokenData - Updated access token data
+ */
+export async function persistProviderTokenRefresh(store: Keyv, tokenData: AccessToken): Promise<void> {
+  const accessKey = `dcr:access:${tokenData.access_token}`;
+  const accessRecord = await store.get<AccessToken>(accessKey, { raw: true });
+  if (!accessRecord) throw new Error('Cannot persist provider refresh for a missing DCR access token');
+
+  if (!(await store.set(accessKey, tokenData, remainingTtl(accessRecord.expires)))) {
+    throw new Error('Failed to persist refreshed DCR access token');
+  }
+
+  if (tokenData.refresh_token) {
+    const refreshKey = `dcr:refresh:${tokenData.refresh_token}`;
+    const refreshRecord = await store.get<AccessToken>(refreshKey, { raw: true });
+    if (refreshRecord) {
+      if (!(await store.set(refreshKey, tokenData, remainingTtl(refreshRecord.expires)))) {
+        throw new Error('Failed to persist refreshed DCR refresh token');
+      }
+    }
+  }
+
+  const providerKey = `dcr:provider:${tokenData.access_token}`;
+  const providerRecord = await store.get<ProviderTokens>(providerKey, { raw: true });
+  if (providerRecord) {
+    if (!(await store.set(providerKey, tokenData.providerTokens, remainingTtl(providerRecord.expires)))) {
+      throw new Error('Failed to persist refreshed provider token index');
+    }
+  }
+}
+
+function remainingTtl(expires: number | null | undefined): number {
+  if (expires === null || expires === undefined) return 0;
+  return Math.max(1, expires - Date.now());
+}
+
+/**
  * Retrieve provider tokens for a DCR access token
  *
  * @param store - Keyv store for all DCR data

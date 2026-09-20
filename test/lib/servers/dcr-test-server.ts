@@ -11,6 +11,7 @@ import cors from 'cors';
 import express from 'express';
 import type { Server } from 'http';
 import Keyv from 'keyv';
+import type { Socket } from 'net';
 import { z } from 'zod';
 import { createDcrRouter, DcrOAuthProvider } from '../../../src/index.ts';
 
@@ -183,21 +184,28 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
     console.log(`   MCP endpoint: ${baseUrl}/mcp`);
     console.log(`   DCR endpoints: ${baseUrl}/.well-known/oauth-authorization-server`);
   });
+  const connections = new Set<Socket>();
+  httpServer.on('connection', (socket) => {
+    connections.add(socket);
+    socket.once('close', () => connections.delete(socket));
+  });
 
   return {
     url: baseUrl,
     store,
     close: async () => {
-      // Close HTTP server
-      // First, close all active connections to prevent hanging
-      httpServer.closeAllConnections();
-
-      return new Promise<void>((resolve, reject) => {
+      const closed = new Promise<void>((resolve, reject) => {
         httpServer.close((err) => {
           if (err) reject(err);
           else resolve();
         });
       });
+      if (typeof httpServer.closeAllConnections === 'function') {
+        httpServer.closeAllConnections();
+      } else {
+        for (const socket of connections) socket.destroy();
+      }
+      return closed;
     },
   };
 }

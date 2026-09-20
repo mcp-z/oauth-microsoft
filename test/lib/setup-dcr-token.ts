@@ -148,8 +148,6 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
     }
 
     console.log('✅ Tokens received');
-    console.log(`   Access Token: ${tokens.accessToken.substring(0, 20)}...`);
-    console.log(`   Refresh Token: ${tokens.refreshToken.substring(0, 20)}...`);
 
     // Verify provider tokens work by calling verify endpoint
     console.log('\n🔍 Verifying provider tokens...');

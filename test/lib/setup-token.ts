@@ -185,6 +185,7 @@ async function setupToken(): Promise<void> {
         if (response.ok) {
           const tokenResponse = (await response.json()) as {
             access_token: string;
+            refresh_token?: string;
             expires_in?: number;
           };
 
@@ -195,12 +196,12 @@ async function setupToken(): Promise<void> {
           });
 
           existingDcrToken.providerAccessToken = tokenResponse.access_token;
+          existingDcrToken.providerRefreshToken = tokenResponse.refresh_token || existingDcrToken.providerRefreshToken;
           existingDcrToken.providerExpiresAt = Date.now() + (tokenResponse.expires_in ?? 3600) * 1000;
 
           await dcrStore.set('microsoft', existingDcrToken);
 
           console.log('✅ DCR token refreshed successfully!');
-          console.log(`   Access Token: ${existingDcrToken.providerAccessToken.substring(0, 20)}...`);
           console.log('');
         } else {
           console.log('⚠️  Token refresh failed. Starting new OAuth flow...');
@@ -218,8 +219,6 @@ async function setupToken(): Promise<void> {
     if (existingDcrToken && existingDcrToken.providerExpiresAt > Date.now()) {
       console.log('✅ Valid DCR token available!');
       console.log(`   Client ID: ${existingDcrToken.clientId}`);
-      console.log(`   Access Token: ${existingDcrToken.providerAccessToken.substring(0, 20)}...`);
-      console.log(`   Refresh Token: ${existingDcrToken.providerRefreshToken.substring(0, 20)}...`);
       console.log('');
     } else {
       // Import DCR setup helper

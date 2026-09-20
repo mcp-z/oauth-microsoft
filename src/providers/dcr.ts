@@ -10,6 +10,7 @@
 
 import type { ProviderTokens } from '@mcp-z/oauth';
 import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server';
+import { createRefreshedToken } from '../lib/create-refreshed-token.ts';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import type { AuthContext, EnrichedExtra, Logger, MicrosoftAuthProvider } from '../types.ts';
 
@@ -158,12 +159,7 @@ export class DcrOAuthProvider {
 
     const tokenResponse = (await response.json()) as TokenResponse;
 
-    return {
-      accessToken: tokenResponse.access_token,
-      refreshToken: refreshToken, // Keep original refresh token
-      ...(tokenResponse.expires_in !== undefined && { expiresAt: Date.now() + tokenResponse.expires_in * 1000 }),
-      ...(tokenResponse.scope !== undefined && { scope: tokenResponse.scope }),
-    };
+    return createRefreshedToken(tokenResponse, refreshToken);
   }
 
   /**

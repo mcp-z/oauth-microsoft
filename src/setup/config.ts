@@ -6,7 +6,7 @@
  * parseConfig().
  */
 
-import { parseArgs } from 'util';
+import { parseArgs } from '@pkgjs/parseargs';
 import type { DcrConfig, OAuthConfig } from '../types.ts';
 
 // Re-export for external use
