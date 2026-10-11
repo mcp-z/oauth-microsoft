@@ -1,5 +1,27 @@
 name: Live provider tests
 on:
+  workflow_call:
+    inputs:
+      runner:
+        type: string
+        required: true
+    secrets:
+      CI_SECRETS_TOKEN: {required: true}
+      TEST_ACCOUNT_ID: {required: true}
+      TEST_REFRESH_TOKEN: {required: true}
+      TEST_SCOPE: {required: true}
+      MS_CLIENT_ID: {required: true}
+      MS_CLIENT_SECRET: {required: false}
+      MS_TENANT_ID: {required: true}
+      TEST_DEVICE_REFRESH_TOKEN: {required: true}
+      TEST_DEVICE_SCOPE: {required: true}
+      TEST_DCR_REFRESH_TOKEN: {required: true}
+      TEST_DCR_SCOPE: {required: true}
+      MS_TEST_DCR_CLIENT_ID: {required: true}
+      MS_TEST_DCR_CLIENT_SECRET: {required: false}
+      MS_TEST_DCR_TENANT_ID: {required: true}
+      TEST_DCR_CLIENT_ID: {required: true}
+      TEST_DCR_CLIENT_SECRET: {required: true}
   workflow_dispatch:
     inputs:
       runner:
@@ -11,16 +33,16 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: live-provider-tests
-  cancel-in-progress: false
-
 jobs:
   test:
     if: github.ref == 'refs/heads/master'
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: live-test
+    concurrency:
+      group: live-provider-tests
+      cancel-in-progress: false
+      queue: max
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         id: checkout
@@ -54,7 +76,7 @@ jobs:
           TEST_DCR_CLIENT_SECRET: ${{ secrets.TEST_DCR_CLIENT_SECRET }}
       - name: Run live tests
         run: npm test -- --bail
-        env:
+        env: &live-test-env
           TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
           TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
           MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
@@ -67,6 +89,9 @@ jobs:
           MS_TEST_DCR_TENANT_ID: ${{ secrets.MS_TEST_DCR_TENANT_ID }}
           TEST_INCLUDE_MANUAL: 'false'
           HEADLESS: 'true'
+      - name: Run full admitted engines
+        run: npm run test:engines -- --bail
+        env: *live-test-env
       - name: Persist updated credentials
         if: always() && steps.seed.outcome != 'skipped'
         run: node scripts/ci-tokens.ts persist

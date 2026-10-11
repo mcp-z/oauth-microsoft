@@ -9,16 +9,16 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
   TEST_INCLUDE_MANUAL: 'false'
 
 jobs:
   test:
-    name: Credential-free tests / ${{ matrix.os }}
+    if: github.event_name == 'pull_request'
+    name: Local PR tests / ${{ matrix.os }}
+    concurrency:
+      group: ci-pr-${{ github.ref }}-${{ matrix.os }}
+      cancel-in-progress: true
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -37,5 +37,37 @@ jobs:
       - run: git config --global user.email "actions@users.noreply.github.com"
       - run: npm ci
       - run: npm run prepublishOnly
-      - run: npm run test:ci
-      - run: npm run test:ci:engines
+      - run: npm test -- "test/exports/*.test.*" "test/unit/lib/*.test.ts" "test/unit/setup/*.test.ts"
+      - run: npm run test:engines -- "test/exports/*.test.*" "test/unit/lib/*.test.ts" "test/unit/setup/*.test.ts"
+
+  ubuntu:
+    name: Full trusted tests / Ubuntu
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/live.yml
+    with:
+      runner: ubuntu-latest
+    secrets: &live-secrets
+      CI_SECRETS_TOKEN: ${{ secrets.CI_SECRETS_TOKEN }}
+      TEST_ACCOUNT_ID: ${{ secrets.TEST_ACCOUNT_ID }}
+      TEST_REFRESH_TOKEN: ${{ secrets.TEST_REFRESH_TOKEN }}
+      TEST_SCOPE: ${{ secrets.TEST_SCOPE }}
+      MS_CLIENT_ID: ${{ secrets.MS_CLIENT_ID }}
+      MS_CLIENT_SECRET: ${{ secrets.MS_CLIENT_SECRET }}
+      MS_TENANT_ID: ${{ secrets.MS_TENANT_ID }}
+      TEST_DEVICE_REFRESH_TOKEN: ${{ secrets.TEST_DEVICE_REFRESH_TOKEN }}
+      TEST_DEVICE_SCOPE: ${{ secrets.TEST_DEVICE_SCOPE }}
+      TEST_DCR_REFRESH_TOKEN: ${{ secrets.TEST_DCR_REFRESH_TOKEN }}
+      TEST_DCR_SCOPE: ${{ secrets.TEST_DCR_SCOPE }}
+      MS_TEST_DCR_CLIENT_ID: ${{ secrets.MS_TEST_DCR_CLIENT_ID }}
+      MS_TEST_DCR_CLIENT_SECRET: ${{ secrets.MS_TEST_DCR_CLIENT_SECRET }}
+      MS_TEST_DCR_TENANT_ID: ${{ secrets.MS_TEST_DCR_TENANT_ID }}
+      TEST_DCR_CLIENT_ID: ${{ secrets.TEST_DCR_CLIENT_ID }}
+      TEST_DCR_CLIENT_SECRET: ${{ secrets.TEST_DCR_CLIENT_SECRET }}
+
+  windows:
+    name: Full trusted tests / Windows
+    needs: ubuntu
+    uses: ./.github/workflows/live.yml
+    with:
+      runner: windows-latest
+    secrets: *live-secrets
