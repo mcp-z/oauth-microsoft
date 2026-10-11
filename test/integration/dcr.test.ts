@@ -8,6 +8,7 @@ import '../lib/env-loader.ts';
 import { createServerRegistry } from '@mcp-z/client';
 import assert from 'assert';
 import Keyv from 'keyv';
+import { requiredEnv } from 'portable-env';
 import { MS_SCOPE } from '../lib/constants.ts';
 import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 import { logger } from '../lib/test-utils.ts';
@@ -25,14 +26,10 @@ describe('DCR Integration Test (Microsoft)', () => {
     this.timeout(120000); // 2 minutes for manual OAuth flow
 
     // DCR credentials - completely separate from loopback credentials
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
-    const tenantId = process.env.MS_TEST_DCR_TENANT_ID;
-    const redirectUri = process.env.MS_TEST_DCR_REDIRECT_URI;
-
-    if (!clientId || !tenantId || !redirectUri) {
-      throw new Error('Microsoft DCR integration test requires MS_TEST_DCR_CLIENT_ID, MS_TEST_DCR_TENANT_ID, and MS_TEST_DCR_REDIRECT_URI environment variables.\n' + 'Configure DCR credentials in .env.test to run integration tests.');
-    }
+    const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
+    const redirectUri = requiredEnv('MS_TEST_DCR_REDIRECT_URI');
 
     // Parse redirect URI to get base URL (strip /oauth/callback path)
     const redirectUrl = new URL(redirectUri);
@@ -122,13 +119,10 @@ describe('DCR Integration Test (Microsoft)', () => {
     this.timeout(120000); // 2 minutes for manual OAuth flow
 
     // DCR credentials - completely separate from loopback credentials
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
-    const tenantId = process.env.MS_TEST_DCR_TENANT_ID;
-    const redirectUri = process.env.MS_TEST_DCR_REDIRECT_URI;
-    if (!clientId || !tenantId || !redirectUri) {
-      throw new Error('MS_TEST_DCR_CLIENT_ID, MS_TEST_DCR_TENANT_ID, and MS_TEST_DCR_REDIRECT_URI required');
-    }
+    const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
+    const redirectUri = requiredEnv('MS_TEST_DCR_REDIRECT_URI');
 
     // Parse redirect URI to get base URL
     const redirectUrl = new URL(redirectUri);

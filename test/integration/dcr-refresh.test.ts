@@ -13,6 +13,7 @@ import getPort from 'get-port';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
+import { requiredEnv } from 'portable-env';
 import * as dcrUtils from '../../src/lib/dcr-utils.ts';
 import type { AccessToken } from '../../src/types.ts';
 import { MS_SCOPE } from '../lib/constants.ts';
@@ -76,12 +77,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     }
 
     // DCR credentials - completely separate from loopback credentials
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
-    const tenantId = process.env.MS_TEST_DCR_TENANT_ID;
-    if (!clientId || !tenantId) {
-      throw new Error('MS_TEST_DCR_CLIENT_ID and MS_TEST_DCR_TENANT_ID environment variables required. Configure in .env.test');
-    }
+    const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
 
     // Get dynamic port to avoid conflicts (refresh tests don't need fixed URI)
     const port = await getPort();
@@ -292,12 +290,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     this.timeout(10000);
 
     // DCR credentials - completely separate from loopback credentials
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
-    const tenantId = process.env.MS_TEST_DCR_TENANT_ID;
-    if (!clientId || !tenantId) {
-      throw new Error('MS_TEST_DCR_CLIENT_ID and MS_TEST_DCR_TENANT_ID environment variables required. Configure in .env.test');
-    }
+    const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
 
     // Get dynamic port to avoid conflicts (refresh tests don't need fixed URI)
     const port = await getPort();

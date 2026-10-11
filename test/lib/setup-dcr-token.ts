@@ -63,7 +63,7 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
 
     // Start callback listener
     console.log('\n📡 Starting callback server...');
-    const callbackPort = await getPort();
+    const callbackPort = await getPort({ host: 'localhost' });
     callbackListener = new OAuthCallbackListener({ port: callbackPort });
     await callbackListener.start();
     const callbackUrl = callbackListener.getCallbackUrl();

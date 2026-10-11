@@ -13,28 +13,7 @@ A few conventions here differ from what you might expect:
 
 ## Branches
 
-Two lines. `master` is the current major and where all new work goes; `support/1.x` maintains the 1.x line for consumers who have not migrated.
-
-    master          2.x    current    the v2 MCP SDK, both protocol eras
-    support/1.x     1.x    security fixes only, cut at v1.1.1
-
-Check which one you are on before editing:
-
-```bash
-git rev-parse --abbrev-ref HEAD
-```
-
-Features, dependency migrations and API changes go to `master` only. A security fix that also affects 1.x is **cherry-picked** to `support/1.x` — never merge the branches into each other, in either direction.
-
-This file is the 1.x line's guide too. It lives only on `master` so it cannot drift between the lines; from `support/1.x`, read it with `git show master:CONTRIBUTING.md`.
-
-Releasing `support/1.x` carries one trap. `npm publish` moves `latest` to the highest version published, so a 1.x release made after 2.0.0 exists must name its dist-tag or every bare `npm install @mcp-z/oauth-microsoft` serves the old line:
-
-```bash
-npm publish --tag support-1
-```
-
-`prepublishOnly` refuses a bare publish from `support/1.x`, so forgetting the flag fails the publish rather than moving `latest`. `npm dist-tag add @mcp-z/oauth-microsoft@<version> latest` reverses a mistake at any time.
+`master` is the only maintained release line. The 1.x line is retired and receives no fixes. All changes target `master`.
 
 ## Pre-Commit Commands
 
@@ -66,19 +45,22 @@ Specs live in `test/unit/`, mirroring `src/`. Cross-service specs live in `test/
 
 ### Microsoft Azure App Configuration
 
-All tests (including DCR integration tests) use a single Azure app registration. Microsoft requires a client secret for confidential clients (DCR tests):
+Loopback and device-code tests use `MS_CLIENT_ID` and `MS_TENANT_ID`. DCR tests use a separate app registration configured through `MS_TEST_DCR_CLIENT_ID` and `MS_TEST_DCR_TENANT_ID`.
 
 1. Go to [Azure Portal App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 2. Create or select an app registration
-3. Under **Certificates & secrets**, create a client secret
+3. For a confidential client, create a client secret under **Certificates & secrets**; public clients do not require one
 4. Under **Authentication**, add redirect URIs as needed (e.g., `http://localhost:3000/oauth/callback`)
+
+Configure the separate DCR registration with `MS_TEST_DCR_CLIENT_ID` and `MS_TEST_DCR_TENANT_ID`, plus `MS_TEST_DCR_CLIENT_SECRET` when it is confidential. Manual DCR integration tests also require `MS_TEST_DCR_REDIRECT_URI`, registered on that app. `npm run test:setup` generates loopback and device-code tokens and, when the DCR client ID and tenant are configured, separate DCR tokens.
 
 ### Environment Variables
 
-Copy `.env.test.example` to `.env.test` and configure:
+Supply these values through the shell or CI, or copy `.env.test.example` to `.env.test` for local configuration. Tests optionally load the file through `portable-env`; file values override matching inherited values. Enabled live tests require their necessary values, not the file itself.
 
 ```bash
 MS_CLIENT_ID=your-client-id
+# Optional for public clients
 MS_CLIENT_SECRET=your-client-secret
 MS_TENANT_ID=common
 
@@ -86,7 +68,7 @@ MS_TENANT_ID=common
 TEST_INCLUDE_MANUAL=true
 ```
 
-**Note**: `MS_CLIENT_SECRET` is required for DCR tests (Microsoft confidential clients require a secret for token exchange).
+`MS_CLIENT_SECRET` and `MS_TEST_DCR_CLIENT_SECRET` are optional for public clients. Confidential clients require their corresponding secret for token exchange.
 
 ## Package Development
 
