@@ -25,16 +25,6 @@ import { logger } from '../../lib/test-utils.ts';
 
 const config = createConfig();
 
-it('DeviceCodeProvider - getAccessToken returns valid token', async () => {
-  // Skip this test - requires interactive device code flow which is better tested in integration tests
-  // This test would need account management state which is better tested in middleware tests
-});
-
-it('DeviceCodeProvider - caches and reuses access tokens', async () => {
-  // Skip this test - requires interactive device code flow which is better tested in integration tests
-  // Token caching behavior is verified in other provider tests
-});
-
 let sharedTokenStore: Keyv;
 let sharedAuthProvider: DeviceCodeProvider;
 let realTokenData: unknown;

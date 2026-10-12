@@ -17,6 +17,7 @@ import { createServer } from 'http';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
+import { requiredEnv } from 'portable-env';
 import { z } from 'zod';
 import { createTestExtra, logger } from '../../lib/test-utils.ts';
 
@@ -203,8 +204,7 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     }
     assert.ok(storedTokens, 'No stored DCR tokens - run the DCR flow first');
 
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
-    assert.ok(clientId, 'MS_TEST_DCR_CLIENT_ID must be set');
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
@@ -249,8 +249,7 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
   it('should fail refresh with invalid token', async function () {
     this.timeout(10000);
 
-    const clientId = process.env.MS_TEST_DCR_CLIENT_ID;
-    assert.ok(clientId, 'MS_TEST_DCR_CLIENT_ID must be set');
+    const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
     const realProvider = new DcrOAuthProvider({
