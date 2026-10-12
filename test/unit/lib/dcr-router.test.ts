@@ -656,7 +656,7 @@ describe('unit/dcr-router-cimd', () => {
   });
 
   it('resolves a CIMD client and validates its exact redirect URI', async () => {
-    const documentPort = await getPort();
+    const documentPort = await getPort({ host: '127.0.0.1' });
     const documentApp = express();
     const redirectUri = 'http://localhost:9999/callback';
     const clientId = `http://127.0.0.1:${documentPort}/client.json`;
@@ -704,7 +704,7 @@ describe('unit/dcr-router-cimd', () => {
 
   it('returns a generic invalid_client for CIMD resolution failures', async () => {
     const leaked = 'internal-hostname.example: secret-token';
-    const documentPort = await getPort();
+    const documentPort = await getPort({ host: '127.0.0.1' });
     const documentApp = express();
     documentApp.get('/client.json', (_req, res) => res.status(502).send(leaked));
     const documentServer = documentApp.listen(documentPort, '127.0.0.1');

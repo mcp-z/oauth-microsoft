@@ -45,10 +45,10 @@
     "format": "tsds format",
     "prepublish:check": "ncp",
     "prepublishOnly": "node scripts/require-dist-tag.cjs && tsds validate",
-    "test": "tsds test:node --require test/lib/env-loader.ts --no-timeouts",
-    "test:ci": "tsds test:node --require test/lib/env-loader.ts --no-timeouts --ignore \"test/integration/**\" --ignore \"test/unit/providers/**\"",
-    "test:ci:engines": "nvu engines tsds test:node --require test/lib/env-loader.ts --no-timeouts --ignore \"test/integration/**\" --ignore \"test/unit/providers/**\"",
-    "test:engines": "nvu engines tsds test:node --require test/lib/env-loader.ts --no-timeouts",
+    "test": "tsds test:node --no-timeouts",
+    "test:ci": "tsds test:node --no-timeouts",
+    "test:ci:engines": "nvu engines tsds test:node --no-timeouts",
+    "test:engines": "nvu engines tsds test:node --no-timeouts",
     "test:setup": "node test/lib/setup-token.ts",
     "version": "tsds version"
   },
@@ -60,7 +60,7 @@
     "zod": "^4.2.0"
   },
   "devDependencies": {
-    "@mcp-z/client": "^2.0.0",
+    "@mcp-z/client": "^2.4.0",
     "@microsoft/microsoft-graph-client": "^3.0.0",
     "@modelcontextprotocol/node": "^2.0.0",
     "@types/cors": "^2.8.19",
@@ -72,9 +72,9 @@
     "keyv": "^5.0.0",
     "keyv-file": "5.3.3",
     "node-version-use": "^2.4.7",
+    "portable-env": "^1.4.0",
     "ts-dev-stack": "^1.22.1",
-    "tsds-config": "^1.0.4",
-    "tsds-lib": "^1.22.6"
+    "tsds-config": "^1.0.4"
   },
   "peerDependencies": {
     "keyv": "^5.0.0"
