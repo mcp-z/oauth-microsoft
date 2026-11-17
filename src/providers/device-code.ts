@@ -311,11 +311,10 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
 
     // If stored token expired but has refresh token, try refresh
     if (storedToken?.refreshToken) {
+      let refreshedToken: CachedToken | undefined;
       try {
         logger.info('Refreshing expired access token', { accountId: effectiveAccountId });
-        const refreshedToken = await this.refreshAccessToken(storedToken.refreshToken);
-        await setToken(tokenStore, { accountId: effectiveAccountId, service }, refreshedToken);
-        return refreshedToken.accessToken;
+        refreshedToken = await this.refreshAccessToken(storedToken.refreshToken);
       } catch (error) {
         logger.info('Token refresh failed', {
           accountId: effectiveAccountId,
@@ -326,6 +325,11 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
           throw new Error(`Token refresh failed in headless mode. Cannot start interactive device code flow. Error: ${error instanceof Error ? error.message : String(error)}`);
         }
         // Fall through to new device code flow (interactive mode only)
+      }
+      if (refreshedToken) {
+        // Outside the try: a storage failure is not a failed refresh and must surface as itself.
+        await setToken(tokenStore, { accountId: effectiveAccountId, service }, refreshedToken);
+        return refreshedToken.accessToken;
       }
     }
 
