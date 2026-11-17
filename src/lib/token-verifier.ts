@@ -6,6 +6,7 @@
  */
 
 import type { ProviderTokens } from '@mcp-z/oauth';
+import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
 
 /**
  * Authentication information from token verification
@@ -69,6 +70,9 @@ export class DcrTokenVerifier {
           // Failed to parse error JSON, use status text
           errorMessage = response.statusText;
         }
+        // A 401 means the token is not (or no longer) valid: an OAuthError lets the bearer middleware answer 401 with a challenge.
+        // Anything else (an outage) stays a plain Error, which the middleware answers 500.
+        if (response.status === 401) throw new OAuthError(OAuthErrorCode.InvalidToken, `Token verification failed: ${errorMessage}`);
         throw new Error(`Token verification failed: ${errorMessage}`);
       }
 

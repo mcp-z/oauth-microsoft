@@ -1,11 +1,16 @@
 import '../../lib/env-loader.ts';
-import { createCimdResolver } from '@mcp-z/oauth';
-import { createDcrRouter } from '@mcp-z/oauth-microsoft';
+import { createCimdResolver, dcrUtils } from '@mcp-z/oauth';
+import { createDcrRouter, DcrTokenVerifier, verifyBearerToken } from '@mcp-z/oauth-microsoft';
+import { OAuthError as ClientOAuthError, OAuthErrorCode as ClientOAuthErrorCode, refreshAuthorization } from '@modelcontextprotocol/client';
+import { bearerAuthChallengeResponse, OAuthError, requireBearerAuth } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import { createHash } from 'crypto';
 import express from 'express';
 import getPort from 'get-port';
+import { createServer, type Server } from 'http';
 import Keyv from 'keyv';
+import type { AddressInfo } from 'net';
+import { redirectFetch } from '../../lib/redirect-fetch.ts';
 
 describe('unit/dcr-router-auth-challenge', () => {
   it('responds with WWW-Authenticate on missing bearer token', async () => {
@@ -810,6 +815,185 @@ describe('unit/dcr-router-cimd', () => {
       assert.strictEqual(((await wrongClient.json()) as { error?: string }).error, 'invalid_grant');
     } finally {
       server.close();
+    }
+  });
+});
+
+describe('unit/dcr-router-register-status', () => {
+  const start = async (store: Keyv) => {
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+    app.use('/', createDcrRouter({ store, issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id' } }));
+    return { baseUrl, server: app.listen(port) };
+  };
+  const register = (baseUrl: string, body: unknown) => fetch(`${baseUrl}/oauth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+
+  it('answers 500 server_error when the store fails while saving the client', async () => {
+    const failing = {
+      get: async () => undefined,
+      set: async () => {
+        throw new Error('disk full');
+      },
+      delete: async () => false,
+      clear: async () => {},
+    };
+    const { baseUrl, server } = await start(new Keyv({ store: failing }));
+    try {
+      const response = await register(baseUrl, { redirect_uris: ['http://localhost/cb'] });
+      assert.strictEqual(response.status, 500);
+      assert.strictEqual(((await response.json()) as { error?: string }).error, 'server_error');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('keeps 400 invalid_client_metadata for invalid metadata', async () => {
+    const { baseUrl, server } = await start(new Keyv());
+    try {
+      const response = await register(baseUrl, {});
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(((await response.json()) as { error?: string }).error, 'invalid_client_metadata');
+    } finally {
+      server.close();
+    }
+  });
+
+  it('answers 201 for a valid registration', async () => {
+    const { baseUrl, server } = await start(new Keyv());
+    try {
+      assert.strictEqual((await register(baseUrl, { redirect_uris: ['http://localhost/cb'] })).status, 201);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe('unit/dcr-router-revoked-refresh-token', () => {
+  let providerServer: Server;
+  let restoreFetch: () => void;
+  let providerStatus = 400;
+  let providerBody = '{"error":"invalid_grant","error_description":"AADSTS70000: The refresh token has expired or been revoked."}';
+
+  before(async () => {
+    // Controlled provider token endpoint: RFC 6749 section 5.2 error answers.
+    providerServer = createServer((_req, res) => {
+      res.statusCode = providerStatus;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(providerBody);
+    });
+    await new Promise<void>((resolve) => providerServer.listen(0, '127.0.0.1', resolve));
+    restoreFetch = redirectFetch('login.microsoftonline.com', `http://127.0.0.1:${(providerServer.address() as AddressInfo).port}`);
+  });
+
+  after(() => {
+    restoreFetch();
+    providerServer.close();
+  });
+
+  const setup = async () => {
+    const store = new Keyv();
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+    app.use('/', createDcrRouter({ store, issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id', tenantId: 'common' } }));
+    const server = app.listen(port);
+    const client = await dcrUtils.registerClient(store, { redirect_uris: ['http://localhost/cb'], token_endpoint_auth_method: 'client_secret_post' });
+    await dcrUtils.setRefreshToken(store, 'refresh-1', {
+      access_token: 'access-1',
+      token_type: 'Bearer',
+      expires_in: 3600,
+      refresh_token: 'refresh-1',
+      scope: 'read',
+      client_id: client.client_id,
+      providerTokens: { accessToken: 'provider-access', refreshToken: 'provider-refresh' },
+      created_at: Date.now(),
+    });
+    return { store, baseUrl, server, client };
+  };
+  const refresh = (baseUrl: string, client: { client_id: string; client_secret?: string }) =>
+    refreshAuthorization(baseUrl, {
+      metadata: { issuer: baseUrl, authorization_endpoint: `${baseUrl}/oauth/authorize`, token_endpoint: `${baseUrl}/oauth/token`, response_types_supported: ['code'] },
+      clientInformation: client,
+      refreshToken: 'refresh-1',
+    });
+
+  it('answers 400 invalid_grant, which the SDK client raises as its InvalidGrant error', async () => {
+    providerStatus = 400;
+    providerBody = '{"error":"invalid_grant","error_description":"AADSTS70000: The refresh token has expired or been revoked."}';
+    const { baseUrl, server, client } = await setup();
+    try {
+      const response = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: 'refresh-1', client_id: client.client_id, client_secret: client.client_secret ?? '' }),
+      });
+      assert.strictEqual(response.status, 400);
+      assert.strictEqual(response.headers.get('www-authenticate'), null);
+      assert.strictEqual(((await response.json()) as { error?: string }).error, 'invalid_grant');
+
+      await assert.rejects(refresh(baseUrl, client), (error: unknown) => error instanceof ClientOAuthError && error.code === ClientOAuthErrorCode.InvalidGrant);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('keeps 502 for other upstream failures', async () => {
+    providerStatus = 503;
+    providerBody = 'upstream unavailable';
+    const { baseUrl, server, client } = await setup();
+    try {
+      const response = await fetch(`${baseUrl}/oauth/token`, {
+        method: 'POST',
+        body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: 'refresh-1', client_id: client.client_id, client_secret: client.client_secret ?? '' }),
+      });
+      assert.strictEqual(response.status, 502);
+    } finally {
+      server.close();
+    }
+  });
+});
+
+describe('unit/dcr-verifier-bearer-middleware', () => {
+  const challenge = async (verifier: { verifyAccessToken: (token: string) => Promise<never> }, token: string) => {
+    const result = await requireBearerAuth({ verifier: verifier as never })(new Request('http://localhost/mcp', { headers: { authorization: `Bearer ${token}` } }));
+    assert.ok(result instanceof Response, 'expected the middleware to refuse the request');
+    return result;
+  };
+
+  it('answers 401 with an invalid_token challenge for an unknown token verified against the real router', async () => {
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+    app.use('/', createDcrRouter({ store: new Keyv(), issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id', tenantId: 'common' } }));
+    const server = app.listen(port);
+    try {
+      const response = await challenge(new DcrTokenVerifier(`${baseUrl}/oauth/verify`) as never, 'unknown-token');
+      assert.strictEqual(response.status, 401);
+      assert.match(response.headers.get('www-authenticate') ?? '', /^Bearer .*error="invalid_token"/);
+
+      // dcr-verify's function: same mapping, through the SDK's own response builder.
+      await assert.rejects(verifyBearerToken('unknown-token', `${baseUrl}/oauth/verify`), (error: unknown) => {
+        assert.ok(error instanceof OAuthError);
+        assert.strictEqual(bearerAuthChallengeResponse(error).status, 401);
+        return true;
+      });
+    } finally {
+      server.close();
+    }
+  });
+
+  it('answers 500 when verification is unavailable', async () => {
+    const outage = createServer((_req, res) => {
+      res.statusCode = 503;
+      res.end('unavailable');
+    });
+    await new Promise<void>((resolve) => outage.listen(0, '127.0.0.1', resolve));
+    const verifyUrl = `http://127.0.0.1:${(outage.address() as AddressInfo).port}/oauth/verify`;
+    try {
+      assert.strictEqual((await challenge(new DcrTokenVerifier(verifyUrl) as never, 'any-token')).status, 500);
+      await assert.rejects(verifyBearerToken('any-token', verifyUrl), (error: unknown) => error instanceof Error && !(error instanceof OAuthError));
+    } finally {
+      outage.close();
     }
   });
 });

@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.4.1]
+
+### Fixed
+
+- The DCR token endpoint answers 400 `invalid_grant` (RFC 6749 section 5.2) when Microsoft rejects a stored refresh token as `invalid_grant`, so an MCP client discards its tokens and signs in again. Other refresh failures still answer 502.
+- `DcrTokenVerifier.verifyAccessToken` and `verifyBearerToken` throw the MCP SDK's `OAuthError` (`invalid_token`) when `/oauth/verify` answers 401, so the SDK bearer middleware answers an expired or unknown token with 401 and a `WWW-Authenticate` challenge instead of 500. A verification outage still throws a plain `Error` (500).
+- A store failure while saving a registered client answers 500 `server_error` instead of 400 `invalid_client_metadata`. Invalid metadata still answers 400.
+- A failure to delete an abandoned sign-in's pending state no longer crashes the server with an unhandled rejection; it is logged as a warning.
+- When a token refresh succeeds but saving the refreshed token fails, the storage error is thrown as itself instead of being reported as a failed refresh (`LoopbackOAuthProvider` and `DeviceCodeProvider`).
+
 ## [2.4.0]
 
 ### Changed
