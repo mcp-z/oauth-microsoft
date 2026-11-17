@@ -96,11 +96,10 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
       // If stored token expired but has refresh token, try refresh
       if (storedToken?.refreshToken) {
+        let refreshedToken: CachedToken | undefined;
         try {
           logger.info('Refreshing expired access token', { accountId: effectiveAccountId });
-          const refreshedToken = await this.refreshAccessToken(storedToken.refreshToken);
-          await setToken(tokenStore, { accountId: effectiveAccountId, service }, refreshedToken);
-          return refreshedToken.accessToken;
+          refreshedToken = await this.refreshAccessToken(storedToken.refreshToken);
         } catch (error) {
           if (this.config.headless) {
             throw new Error(`Token refresh failed in headless mode: ${error instanceof Error ? error.message : String(error)}`);
@@ -110,6 +109,11 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
             error: error instanceof Error ? error.message : String(error),
           });
           // Fall through to new OAuth flow
+        }
+        if (refreshedToken) {
+          // Outside the try: a storage failure is not a failed refresh and must surface as itself.
+          await setToken(tokenStore, { accountId: effectiveAccountId, service }, refreshedToken);
+          return refreshedToken.accessToken;
         }
       }
     }
@@ -492,7 +496,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
    * Middleware will open+poll and then retry in the same call.
    */
   private async startEphemeralOAuthFlow(): Promise<AuthFlowDescriptor> {
-    const { clientId, tenantId, scope, headless, logger, redirectUri: configRedirectUri, service, tokenStore } = this.config;
+    const { clientId, tenantId, scope, headless, logger, redirectUri: configRedirectUri, service } = this.config;
 
     // Server listen configuration (where ephemeral server binds)
     let listenHost = 'localhost'; // Default: localhost for ephemeral loopback
@@ -603,7 +607,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         server.close();
         // Best-effort cleanup if user never completes flow:
         // delete pending so a future attempt can restart cleanly.
-        void tokenStore.delete(this.pendingKey(stateId));
+        void this.discardAbandonedPendingAuth(stateId);
       }
     }, OAUTH_TIMEOUT_MS);
     timeoutHandle.unref();
@@ -623,6 +627,15 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       provider: service,
       url: authUrl,
     };
+  }
+
+  /** Best-effort removal of an abandoned sign-in; a store failure is logged, never thrown (the caller is a timer). */
+  private async discardAbandonedPendingAuth(stateId: string): Promise<void> {
+    try {
+      await this.config.tokenStore.delete(this.pendingKey(stateId));
+    } catch (error) {
+      this.config.logger.warn('Failed to delete abandoned pending OAuth state', { error: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   private async exchangeCodeForToken(code: string, codeVerifier: string, redirectUri: string): Promise<TokenResponse> {
