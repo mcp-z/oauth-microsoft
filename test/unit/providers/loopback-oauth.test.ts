@@ -69,7 +69,7 @@ before(async () => {
 
   // Find test account (using createAccountKey format: {accountId}:outlook:token)
   const allKeys: string[] = [];
-  const iterator = testTokenStore.iterator?.(undefined);
+  const iterator = testTokenStore.iterator();
   if (iterator) {
     for await (const [key] of iterator) {
       allKeys.push(key);
@@ -77,7 +77,7 @@ before(async () => {
   }
 
   const outlookTokenKey = allKeys.find((k) => {
-    const parts = k.replace(/^keyv:/, '').split(':');
+    const parts = k.split(':');
     return parts.length === 3 && parts[1] === 'outlook' && parts[2] === 'token';
   });
   if (!outlookTokenKey) {
@@ -97,7 +97,7 @@ before(async () => {
     store: new KeyvFile({ filename: tempTokenStorePath }),
   });
   // Copy token keys from real store into temp store (avoid active/linked keys).
-  const testIterator = testTokenStore.iterator?.(undefined);
+  const testIterator = testTokenStore.iterator();
   if (testIterator) {
     for await (const [key, value] of testIterator) {
       const keyString = String(key);

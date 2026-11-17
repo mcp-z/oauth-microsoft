@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.4.0]
+
+### Changed
+
+- Requires `@mcp-z/oauth` `^2.2.0`. The DCR storage helpers (`dcrUtils`) and the `RegisteredClient`, `AuthorizationCode` and `AccessToken` types now come from `@mcp-z/oauth`; this package re-exports the three types from `src/types.ts`.
+- The `keyv` peer range is `^5.5.5 || ^6.1.0`: Keyv instances from either major work, and keys are not migrated between the two majors.
+
+### Fixed
+
+- DCR `listClients` (now in `@mcp-z/oauth`) returns only `dcr:client:` entries under every keyv version.
+
 ## [2.2.2] - 2026-09-20
 
 ### Fixed

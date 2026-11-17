@@ -10,8 +10,9 @@
  *   Called by setup-token.ts
  */
 
+import { randomUUID } from 'node:crypto';
 import { DynamicClientRegistrar, isLoopbackUrl, OAuthCallbackListener, probeAuthCapabilities } from '@mcp-z/client';
-import { openUrl } from '@mcp-z/oauth';
+import { generatePKCE, openUrl } from '@mcp-z/oauth';
 import getPort from 'get-port';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
@@ -36,6 +37,34 @@ interface DcrTokenData {
   providerRefreshToken: string;
   providerAccessToken: string;
   providerExpiresAt: number;
+}
+
+export function createDcrAuthorizationUrl(args: { authorizationEndpoint: string; clientId: string; redirectUri: string; scope: string; state: string; codeChallenge: string }): URL {
+  const url = new URL(args.authorizationEndpoint);
+  url.searchParams.set('client_id', args.clientId);
+  url.searchParams.set('redirect_uri', args.redirectUri);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', args.scope);
+  url.searchParams.set('state', args.state);
+  url.searchParams.set('code_challenge', args.codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  return url;
+}
+
+export function createDcrTokenBody(args: { code: string; redirectUri: string; clientId: string; clientSecret?: string; codeVerifier: string }): URLSearchParams {
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    code: args.code,
+    redirect_uri: args.redirectUri,
+    client_id: args.clientId,
+    code_verifier: args.codeVerifier,
+  });
+  if (args.clientSecret) body.set('client_secret', args.clientSecret);
+  return body;
+}
+
+export function assertDcrCallbackState(actual: string | undefined, expected: string): void {
+  if (!actual || actual !== expected) throw new Error('OAuth callback state mismatch');
 }
 
 export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void> {
@@ -88,22 +117,28 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
     });
     console.log(`   Client ID: ${registration.clientId}`);
 
-    // Build authorization URL
+    // Bind the authorization request to this process and its later token exchange.
+    const { verifier: codeVerifier, challenge: codeChallenge } = generatePKCE();
+    const state = randomUUID();
+
     console.log('\n🔐 Initiating OAuth authorization...');
-    const authUrl = new URL(capabilities.authorizationEndpoint);
-    authUrl.searchParams.set('client_id', registration.clientId);
-    authUrl.searchParams.set('redirect_uri', callbackUrl);
-    authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('scope', scope);
+    const authUrl = createDcrAuthorizationUrl({
+      authorizationEndpoint: capabilities.authorizationEndpoint,
+      clientId: registration.clientId,
+      redirectUri: callbackUrl,
+      scope,
+      state,
+      codeChallenge,
+    });
     console.log(`   Authorization URL: ${authUrl.toString()}`);
 
-    // Open browser for user authorization
+    // Begin waiting before the browser can deliver a fast callback. Promise.all
+    // also attaches rejection handlers to both operations immediately.
     console.log('\n📋 Please authorize in your browser...');
-    await openUrl(authUrl.toString());
-
-    // Wait for callback
     console.log('⏳ Waiting for authorization callback...');
-    const { code } = await callbackListener.waitForCallback();
+    const [callback] = await Promise.all([callbackListener.waitForCallback(), openUrl(authUrl.toString())]);
+    assertDcrCallbackState(callback.state, state);
+    const { code } = callback;
     console.log('✅ Authorization code received');
 
     // Close callback server
@@ -118,13 +153,13 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json',
       },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
+      body: createDcrTokenBody({
         code,
-        redirect_uri: callbackUrl,
-        client_id: registration.clientId,
-        client_secret: registration.clientSecret,
-      }).toString(),
+        redirectUri: callbackUrl,
+        clientId: registration.clientId,
+        clientSecret: registration.clientSecret,
+        codeVerifier,
+      }),
     });
 
     if (!response.ok) {

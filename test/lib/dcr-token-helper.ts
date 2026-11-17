@@ -6,10 +6,10 @@
  */
 
 import type { ProviderTokens } from '@mcp-z/oauth';
+import { dcrUtils } from '@mcp-z/oauth';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
-import * as dcrUtils from '../../src/lib/dcr-utils.ts';
 import type { RegisteredClient } from '../../src/types.ts';
 
 interface DcrTokenData {
