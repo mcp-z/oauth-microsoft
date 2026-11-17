@@ -15,14 +15,13 @@
  * - GET /oauth/verify (token verification for Resource Server)
  */
 
-import { type CimdClientMetadataDocument, type CimdResolver, createCimdResolver, type DcrClientMetadata, type ProviderTokens, type RFC8414Metadata, type RFC9728Metadata } from '@mcp-z/oauth';
+import { type CimdClientMetadataDocument, type CimdResolver, createCimdResolver, type DcrClientMetadata, dcrUtils, type ProviderTokens, type RFC8414Metadata, type RFC9728Metadata } from '@mcp-z/oauth';
 import { createHash, randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import express from 'express';
 import type { Keyv } from 'keyv';
 import { DcrOAuthProvider } from '../providers/dcr.ts';
 import type { AccessToken, AuthorizationCode, OAuthClientConfig, RegisteredClient } from '../types.ts';
-import * as dcrUtils from './dcr-utils.ts';
 
 function isCimdClientId(clientId: unknown): clientId is string {
   if (typeof clientId !== 'string') return false;

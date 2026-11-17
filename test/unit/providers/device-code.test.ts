@@ -43,7 +43,7 @@ before(async () => {
 
   // Find test account (using createAccountKey format: {accountId}:outlook:token)
   const allKeys: string[] = [];
-  const iterator = testTokenStore.iterator?.(undefined);
+  const iterator = testTokenStore.iterator();
   if (iterator) {
     for await (const [key] of iterator) {
       allKeys.push(key);
@@ -51,7 +51,7 @@ before(async () => {
   }
 
   const outlookTokenKey = allKeys.find((k) => {
-    const parts = k.replace(/^keyv:/, '').split(':');
+    const parts = k.split(':');
     return parts.length === 3 && parts[1] === 'outlook' && parts[2] === 'token';
   });
   if (!outlookTokenKey) {
@@ -81,7 +81,7 @@ before(async () => {
 // Clean token store before each test to prevent state pollution
 beforeEach(async () => {
   // Clear all keys from shared token store
-  const iterator = sharedTokenStore.iterator?.(undefined);
+  const iterator = sharedTokenStore.iterator();
   if (iterator) {
     for await (const [key] of iterator) {
       await sharedTokenStore.delete(key);
