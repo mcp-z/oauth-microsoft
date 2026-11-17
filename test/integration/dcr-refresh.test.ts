@@ -281,9 +281,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: testClientId, client_secret: testClientSecret }),
     });
-    assert.strictEqual(refusedResponse.status, 502, 'An upstream refresh failure must not issue a successful DCR response');
+    assert.strictEqual(refusedResponse.status, 400, 'A revoked provider refresh token answers invalid_grant so the client signs in again');
     const refused = (await refusedResponse.json()) as { error?: string; access_token?: string };
-    assert.strictEqual(refused.error, 'server_error');
+    assert.strictEqual(refused.error, 'invalid_grant');
     assert.ok(refused.access_token === undefined, 'An upstream refresh failure must not return a DCR access token');
     console.log('✅ New token verified successfully');
     console.log('✅ Router refresh test passed!');
