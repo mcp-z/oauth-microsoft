@@ -22,6 +22,7 @@ import express from 'express';
 import type { Keyv } from 'keyv';
 import { DcrOAuthProvider } from '../providers/dcr.ts';
 import type { AccessToken, AuthorizationCode, OAuthClientConfig, RegisteredClient } from '../types.ts';
+import { isRevokedRefreshToken } from './provider-refresh-error.ts';
 
 function isCimdClientId(clientId: unknown): clientId is string {
   if (typeof clientId !== 'string') return false;
@@ -31,6 +32,11 @@ function isCimdClientId(clientId: unknown): clientId is string {
   } catch {
     return false;
   }
+}
+
+/** RFC 6750 §3.1 invalid_token challenge: the client must obtain a new token by signing in again. */
+function sendInvalidToken(res: Response, description: string) {
+  return res.status(401).set('WWW-Authenticate', `Bearer error="invalid_token", error_description="${description}"`).json({ error: 'invalid_token', error_description: description });
 }
 
 /**
@@ -173,15 +179,30 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
    * POST /oauth/register
    */
   router.post('/oauth/register', async (req: Request, res: Response) => {
+    // registerClient validates the metadata, then writes the client to the store.
+    // Mark the write so a store failure is not reported as the client's fault.
+    let storeFailed = false;
+    const trackedStore = new Proxy(store, {
+      get(target, prop) {
+        if (prop !== 'set') return Reflect.get(target, prop, target);
+        return async (...args: Parameters<Keyv['set']>) => {
+          try {
+            return await target.set(...args);
+          } catch (storeError) {
+            storeFailed = true;
+            throw storeError;
+          }
+        };
+      },
+    });
     try {
-      const registrationRequest = req.body;
-
-      // Register the client
-      const client = await dcrUtils.registerClient(store, registrationRequest);
-
-      // Return client information (RFC 7591 Section 3.2.1)
+      const client = await dcrUtils.registerClient(trackedStore, req.body);
       res.status(201).json(client);
     } catch (error) {
+      if (storeFailed) {
+        res.status(500).json({ error: 'server_error', error_description: 'Failed to store registered client' });
+        return;
+      }
       res.status(400).json({
         error: 'invalid_client_metadata',
         error_description: error instanceof Error ? error.message : 'Invalid registration request',
@@ -628,6 +649,10 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
           // Refresh the Microsoft access token
           refreshedProviderTokens = await provider.refreshAccessToken(tokenData.providerTokens.refreshToken);
         } catch (error) {
+          if (isRevokedRefreshToken(error)) {
+            // RFC 6749 section 5.2: a rejected refresh token is invalid_grant, which makes a client discard its tokens and sign in again.
+            return res.status(400).json({ error: 'invalid_grant', error_description: 'Provider refresh token is revoked or expired; sign in again' });
+          }
           return res.status(502).json({
             error: 'server_error',
             error_description: `Microsoft token refresh failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -753,7 +778,8 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
     if (providerTokens.expiresAt && Date.now() >= providerTokens.expiresAt - 60000 && providerTokens.refreshToken) {
       try {
         providerTokens = await createProvider(tokenData.scope).refreshAccessToken(providerTokens.refreshToken);
-      } catch {
+      } catch (error) {
+        if (isRevokedRefreshToken(error)) return sendInvalidToken(res, 'Provider refresh token is revoked or expired; sign in again');
         return res.status(502).json({ error: 'server_error', error_description: 'Failed to refresh provider tokens' });
       }
     }

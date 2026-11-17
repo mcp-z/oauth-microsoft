@@ -7,6 +7,7 @@
  */
 
 import type { ProviderTokens } from '@mcp-z/oauth';
+import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
 import { fetchWithTimeout } from './fetch-with-timeout.ts';
 
 /**
@@ -64,6 +65,8 @@ export async function verifyBearerToken(bearerToken: string, verifyUrl: string):
 
   if (!response.ok) {
     const errorText = await response.text();
+    // A 401 means the token is not (or no longer) valid; anything else (an outage) stays a plain Error.
+    if (response.status === 401) throw new OAuthError(OAuthErrorCode.InvalidToken, `Token verification failed: ${response.status} ${errorText}`);
     throw new Error(`Token verification failed: ${response.status} ${errorText}`);
   }
 
