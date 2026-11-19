@@ -10,6 +10,8 @@ import getPort from 'get-port';
 import { createServer, type Server } from 'http';
 import Keyv from 'keyv';
 import type { AddressInfo } from 'net';
+import { verifyTimeout } from '../../../src/lib/verify-timeout.ts';
+import { DcrTokenVerifier as SourceDcrTokenVerifier } from '../../../src/lib/token-verifier.ts';
 import { redirectFetch } from '../../lib/redirect-fetch.ts';
 
 describe('unit/dcr-router-auth-challenge', () => {
@@ -1040,13 +1042,13 @@ describe('unit/dcr-verifier-bearer-middleware', () => {
     });
     await new Promise<void>((resolve) => hung.listen(0, '127.0.0.1', resolve));
     const verifyUrl = `http://127.0.0.1:${(hung.address() as AddressInfo).port}/oauth/verify`;
-    // The bound is a protected member so a subclass can shorten it; 30 s is not waited out.
-    class ShortBoundVerifier extends DcrTokenVerifier {
-      protected override timeoutMs = 50;
-    }
+    // The bound is a module-internal lever that the package entry does not export; 30 s is not waited out.
+    const original = verifyTimeout.ms;
+    verifyTimeout.ms = 50;
     try {
-      assert.strictEqual((await challenge(new ShortBoundVerifier(verifyUrl) as never, 'any-token')).status, 500);
+      assert.strictEqual((await challenge(new SourceDcrTokenVerifier(verifyUrl) as never, 'any-token')).status, 500);
     } finally {
+      verifyTimeout.ms = original;
       hung.closeAllConnections();
       hung.close();
     }
