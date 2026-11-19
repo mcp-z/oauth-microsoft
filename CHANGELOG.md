@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.2]
+
+### Security
+
+- The DCR router no longer serves `GET /debug/clients`, which returned every registered client with its secret to any caller. Anyone who ran a server with `--auth=dcr` reachable by others should treat registered client secrets as exposed.
+
 ## [2.4.1]
 
 ### Fixed

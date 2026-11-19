@@ -807,13 +807,5 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
     return res.json(authInfo);
   });
 
-  /**
-   * Debug endpoint to list registered clients (development only)
-   */
-  router.get('/debug/clients', async (_req: Request, res: Response) => {
-    const clients = await dcrUtils.listClients(store);
-    res.json(clients);
-  });
-
   return router;
 }
