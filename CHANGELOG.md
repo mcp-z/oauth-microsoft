@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- A CIMD client that registers a loopback redirect such as `http://127.0.0.1/callback` can authorize with any port on it (RFC 8252 section 7.3), as registered clients already could. Other paths, hosts and `https` are still refused. Requires `@mcp-z/oauth` `^2.3.0`.
 - `DcrTokenVerifier.verifyAccessToken` gives up after 30 seconds. A verify endpoint that never answers now fails the request (500 from the bearer gate) instead of holding it open. `verifyBearerToken` has the same bound.
 - `DeviceCodeProvider` stops polling once the `expires_in` of the device code has passed and throws "Device code expired", even if Microsoft never answers `expired_token`.
 - `DcrOAuthProvider.authMiddleware()` uses the provider tokens the bearer gate already verified and makes no second `/oauth/verify` request; without a gate it verifies through `DcrTokenVerifier`.

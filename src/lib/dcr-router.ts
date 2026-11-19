@@ -292,7 +292,7 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
     }
 
     // Validate redirect_uri
-    const isValidRedirect = isCimdClient ? (client.redirect_uris?.includes(redirect_uri) ?? false) : await dcrUtils.validateRedirectUri(store, client_id, redirect_uri);
+    const isValidRedirect = isCimdClient ? (client.redirect_uris?.some((registered) => dcrUtils.redirectUriMatches(registered, redirect_uri)) ?? false) : await dcrUtils.validateRedirectUri(store, client_id, redirect_uri);
     if (!isValidRedirect) {
       return res.status(400).json({
         error: 'invalid_request',
