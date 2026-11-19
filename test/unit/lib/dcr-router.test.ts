@@ -10,8 +10,8 @@ import getPort from 'get-port';
 import { createServer, type Server } from 'http';
 import Keyv from 'keyv';
 import type { AddressInfo } from 'net';
-import { verifyTimeout } from '../../../src/lib/verify-timeout.ts';
 import { DcrTokenVerifier as SourceDcrTokenVerifier } from '../../../src/lib/token-verifier.ts';
+import { verifyTimeout } from '../../../src/lib/verify-timeout.ts';
 import { redirectFetch } from '../../lib/redirect-fetch.ts';
 
 describe('unit/dcr-router-auth-challenge', () => {

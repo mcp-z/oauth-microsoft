@@ -8,6 +8,7 @@
 import type { ProviderTokens } from '@mcp-z/oauth';
 import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
 import { fetchWithTimeout } from './fetch-with-timeout.ts';
+import { verifyTimeout } from './verify-timeout.ts';
 
 /**
  * Authentication information from token verification
@@ -39,9 +40,6 @@ export interface AuthInfo {
 export class DcrTokenVerifier {
   private verifyUrl: string;
 
-  /** Milliseconds a verify request may take before it fails; protected so a subclass can shorten it. */
-  protected timeoutMs = 30000;
-
   /**
    * @param verifyUrl - Authorization Server's /oauth/verify endpoint URL
    */
@@ -66,7 +64,7 @@ export class DcrTokenVerifier {
             Authorization: `Bearer ${token}`,
           },
         },
-        this.timeoutMs
+        verifyTimeout.ms
       );
 
       if (!response.ok) {
