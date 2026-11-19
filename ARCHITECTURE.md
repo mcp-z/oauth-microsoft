@@ -677,7 +677,7 @@ async function handler(args, extra: EnrichedExtra) {
 - Token requests go to the tenant's `/oauth2/v2.0/token` endpoint, made by this package's own code
 - Token format: JWT (JSON Web Tokens) vs Google's opaque tokens
 - Tenant awareness: Microsoft requires tenant configuration
-- Refresh token handling: each provider refreshes an expired cached token itself, with a `refresh_token` grant against the token endpoint, and stores the result
+- Refresh token handling: each provider refreshes an expired token itself, with a `refresh_token` grant against the token endpoint. Loopback and device code store the refreshed token; the DCR provider keeps it only for that auth provider and stores nothing
 - Token validation: Microsoft provides built-in token validation
 
 **API Client Pattern**:
