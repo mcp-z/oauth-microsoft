@@ -154,7 +154,7 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
     }
 
     // Step 3: Poll token endpoint
-    return await this.pollForToken(device_code, interval || 5, accountId);
+    return await this.pollForToken(device_code, interval || 5, expires_in, accountId);
   }
 
   /**
@@ -165,15 +165,22 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
    * - slow_down: Increase polling interval by 5 seconds
    * - authorization_declined: User denied authorization
    * - expired_token: Device code expired (typically after 15 minutes)
+   *
+   * The poll also ends once the `expires_in` of the device code has passed.
    */
-  private async pollForToken(deviceCode: string, intervalSeconds: number, accountId: string): Promise<CachedToken> {
+  private async pollForToken(deviceCode: string, intervalSeconds: number, expiresInSeconds: number, accountId: string): Promise<CachedToken> {
     const { clientId, tenantId, logger, service, tokenStore } = this.config;
     const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
 
     let currentInterval = intervalSeconds;
     const startTime = Date.now();
+    const deadline = startTime + expiresInSeconds * 1000;
 
     while (true) {
+      if (Date.now() >= deadline) {
+        throw new Error('Device code expired. Please restart the authentication flow.');
+      }
+
       // Wait for polling interval
       await new Promise((resolve) => setTimeout(resolve, currentInterval * 1000));
 

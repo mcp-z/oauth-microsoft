@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.3] - 2026-11-19
+
+### Fixed
+
+- `DcrTokenVerifier.verifyAccessToken` gives up after 30 seconds. A verify endpoint that never answers now fails the request (500 from the bearer gate) instead of holding it open. `verifyBearerToken` has the same bound.
+- `DeviceCodeProvider` stops polling once the `expires_in` of the device code has passed and throws "Device code expired", even if Microsoft never answers `expired_token`.
+- `DcrOAuthProvider.authMiddleware()` uses the provider tokens the bearer gate already verified and makes no second `/oauth/verify` request; without a gate it verifies through `DcrTokenVerifier`.
+
+### Deprecated
+
+- The `/mcp` presence check in `createDcrRouter` never runs behind `connectHttp` and verifies nothing. It is removed at the next major; use `bearerAuth` on `createHttpMcpRouter` or the SDK's `requireBearerAuth`.
+
 ## [2.4.2]
 
 ### Security

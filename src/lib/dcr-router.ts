@@ -90,6 +90,9 @@ export function createDcrRouter(config: DcrRouterConfig): express.Router {
       },
     });
 
+  // @deprecated Never runs behind `connectHttp`, which mounts `/mcp` ahead of this router and ends the response.
+  // It runs only when a caller mounts this router before its own `/mcp` handler, and checks that a bearer header is present
+  // without verifying it. Pass `bearerAuth` to `createHttpMcpRouter` instead. It is removed at the next major.
   router.use('/mcp', (req: Request, res: Response, next) => {
     const authHeader = req.headers.authorization || req.headers.Authorization;
     const headerValue = Array.isArray(authHeader) ? authHeader[0] : authHeader;
