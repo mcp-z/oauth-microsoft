@@ -682,6 +682,26 @@ describe('unit/dcr-router-cimd', () => {
     }
   });
 
+  it('matches a registered loopback redirect on any port and refuses other path, host or scheme', async () => {
+    const documentPort = await getPort({ host: '127.0.0.1' });
+    const documentApp = express();
+    const clientId = `http://127.0.0.1:${documentPort}/client.json`;
+    documentApp.get('/client.json', (_req, res) => res.json({ client_id: clientId, client_name: 'Local CIMD client', redirect_uris: ['http://127.0.0.1/callback'] }));
+    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
+    const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
+    try {
+      const accepted = await fetch(authorizeUrl(baseUrl, clientId, 'http://127.0.0.1:54321/callback'), { redirect: 'manual' });
+      assert.strictEqual(accepted.status, 302);
+      for (const refusedUri of ['http://127.0.0.1:54321/other', 'http://localhost:54321/callback', 'https://127.0.0.1:54321/callback']) {
+        const refused = await fetch(authorizeUrl(baseUrl, clientId, refusedUri), { redirect: 'manual' });
+        assert.strictEqual(refused.status, 400, refusedUri);
+      }
+    } finally {
+      server.close();
+      documentServer.close();
+    }
+  });
+
   it('prefers stored registrations for opaque and URL-shaped client IDs', async () => {
     const clientId = 'dcr_opaque-client';
     const registeredUrlClientId = 'https://registered.example/client.json';
