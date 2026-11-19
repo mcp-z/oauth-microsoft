@@ -869,6 +869,23 @@ describe('unit/dcr-router-register-status', () => {
   });
 });
 
+describe('unit/dcr-router-no-client-listing', () => {
+  it('answers 404 on GET /debug/clients after a client is registered', async () => {
+    const port = await getPort();
+    const baseUrl = `http://localhost:${port}`;
+    const app = express();
+    app.use('/', createDcrRouter({ store: new Keyv(), issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id' } }));
+    const server = app.listen(port);
+    try {
+      const registered = await fetch(`${baseUrl}/oauth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redirect_uris: ['http://localhost/cb'] }) });
+      assert.strictEqual(registered.status, 201);
+      assert.strictEqual((await fetch(`${baseUrl}/debug/clients`)).status, 404);
+    } finally {
+      server.close();
+    }
+  });
+});
+
 describe('unit/dcr-router-revoked-refresh-token', () => {
   let providerServer: Server;
   let restoreFetch: () => void;
