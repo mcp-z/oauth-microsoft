@@ -1013,4 +1013,35 @@ describe('unit/dcr-verifier-bearer-middleware', () => {
       outage.close();
     }
   });
+
+  it('answers 500 when the verify endpoint never answers, after the verifier bound', async () => {
+    const hung = createServer(() => {
+      // Never answers; the verifier's own bound must end the request.
+    });
+    await new Promise<void>((resolve) => hung.listen(0, '127.0.0.1', resolve));
+    const verifyUrl = `http://127.0.0.1:${(hung.address() as AddressInfo).port}/oauth/verify`;
+    // The bound is a protected member so a subclass can shorten it; 30 s is not waited out.
+    class ShortBoundVerifier extends DcrTokenVerifier {
+      protected override timeoutMs = 50;
+    }
+    try {
+      assert.strictEqual((await challenge(new ShortBoundVerifier(verifyUrl) as never, 'any-token')).status, 500);
+    } finally {
+      hung.closeAllConnections();
+      hung.close();
+    }
+  });
+
+  it('verifyBearerToken still refuses a verify response without provider tokens', async () => {
+    const bare = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ token: 't', clientId: 'c', scopes: [], expiresAt: Date.now() + 1000 }));
+    });
+    await new Promise<void>((resolve) => bare.listen(0, '127.0.0.1', resolve));
+    try {
+      await assert.rejects(verifyBearerToken('t', `http://127.0.0.1:${(bare.address() as AddressInfo).port}/oauth/verify`), /missing required provider tokens/);
+    } finally {
+      bare.close();
+    }
+  });
 });
