@@ -6,7 +6,7 @@
 
 ## Overview
 
-This library provides Microsoft OAuth 2.0 authentication (via MSAL - Microsoft Authentication Library) with multi-account support for MCP (Model Context Protocol) servers. It implements two complementary OAuth patterns: **Loopback OAuth** for desktop/CLI apps and **MCP SDK OAuth** for web-based stateless deployments.
+This library provides Microsoft OAuth 2.0 authentication (implemented directly against the Microsoft identity platform v2.0 endpoints with `fetch`, without MSAL) with multi-account support for MCP (Model Context Protocol) servers. It implements two complementary OAuth patterns: **Loopback OAuth** for desktop/CLI apps and **MCP SDK OAuth** for web-based stateless deployments.
 
 **Core Design Principles**:
 - **SOLID compliance**: Single Responsibility, Dependency Inversion, Inversion of Control
@@ -417,7 +417,7 @@ Middleware enriches request context with guaranteed auth:
 ```typescript
 export interface EnrichedExtra extends RequestHandlerExtra {
   authContext: {
-    auth: AuthenticationProvider;  // MSAL-compatible provider for Microsoft Graph
+    auth: AuthenticationProvider;  // Microsoft Graph AuthenticationProvider
     accountId: string;              // Account being used
   };
   logger: Logger;                   // Injected logger
@@ -599,7 +599,7 @@ http://127.0.0.1:{port}/callback
 - **Consumer apps**: Use `'consumers'` to block work accounts
 
 **Token Security**:
-- Tenant information embedded in MSAL tokens
+- Tenant information embedded in the access token
 - Token validation includes tenant check
 - Cross-tenant token use prevented by Microsoft identity platform
 
@@ -671,13 +671,13 @@ async function handler(args, extra: EnrichedExtra) {
 
 ## Microsoft-Specific Considerations
 
-### MSAL vs Google OAuth
+### Microsoft vs Google OAuth
 
 **Key Differences**:
-- Microsoft uses MSAL (Microsoft Authentication Library)
+- Token requests go to the tenant's `/oauth2/v2.0/token` endpoint, made by this package's own code
 - Token format: JWT (JSON Web Tokens) vs Google's opaque tokens
 - Tenant awareness: Microsoft requires tenant configuration
-- Refresh token handling: MSAL manages refresh automatically
+- Refresh token handling: each provider refreshes an expired token itself, with a `refresh_token` grant against the token endpoint. Loopback and device code store the refreshed token; the DCR provider keeps it only for that auth provider and stores nothing
 - Token validation: Microsoft provides built-in token validation
 
 **API Client Pattern**:
@@ -686,7 +686,7 @@ async function handler(args, extra: EnrichedExtra) {
 const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
 // Microsoft (Microsoft Graph)
-const client = Client.initWithMiddleware({ authProvider: msalAuthProvider });
+const client = Client.initWithMiddleware({ authProvider: authProvider });
 const messages = await client.api('/me/messages').get();
 ```
 
@@ -755,7 +755,6 @@ async function handler(args, extra: EnrichedExtra) {
 ## References
 
 - [Microsoft Identity Platform Documentation](https://docs.microsoft.com/en-us/azure/active-directory/develop/)
-- [MSAL.js Documentation](https://github.com/AzureAD/microsoft-authentication-library-for-js)
 - [Microsoft Graph API](https://docs.microsoft.com/en-us/graph/overview)
 - [RFC 7636 - PKCE](https://datatracker.ietf.org/doc/html/rfc7636)
 - [RFC 8252 - OAuth for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)

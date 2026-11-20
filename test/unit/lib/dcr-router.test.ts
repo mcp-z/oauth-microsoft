@@ -10,6 +10,8 @@ import getPort from 'get-port';
 import { createServer, type Server } from 'http';
 import Keyv from 'keyv';
 import type { AddressInfo } from 'net';
+import { DcrTokenVerifier as SourceDcrTokenVerifier } from '../../../src/lib/token-verifier.ts';
+import { verifyTimeout } from '../../../src/lib/verify-timeout.ts';
 import { redirectFetch } from '../../lib/redirect-fetch.ts';
 
 describe('unit/dcr-router-auth-challenge', () => {
@@ -682,6 +684,26 @@ describe('unit/dcr-router-cimd', () => {
     }
   });
 
+  it('matches a registered loopback redirect on any port and refuses other path, host or scheme', async () => {
+    const documentPort = await getPort({ host: '127.0.0.1' });
+    const documentApp = express();
+    const clientId = `http://127.0.0.1:${documentPort}/client.json`;
+    documentApp.get('/client.json', (_req, res) => res.json({ client_id: clientId, client_name: 'Local CIMD client', redirect_uris: ['http://127.0.0.1/callback'] }));
+    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
+    const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
+    try {
+      const accepted = await fetch(authorizeUrl(baseUrl, clientId, 'http://127.0.0.1:54321/callback'), { redirect: 'manual' });
+      assert.strictEqual(accepted.status, 302);
+      for (const refusedUri of ['http://127.0.0.1:54321/other', 'http://localhost:54321/callback', 'https://127.0.0.1:54321/callback']) {
+        const refused = await fetch(authorizeUrl(baseUrl, clientId, refusedUri), { redirect: 'manual' });
+        assert.strictEqual(refused.status, 400, refusedUri);
+      }
+    } finally {
+      server.close();
+      documentServer.close();
+    }
+  });
+
   it('prefers stored registrations for opaque and URL-shaped client IDs', async () => {
     const clientId = 'dcr_opaque-client';
     const registeredUrlClientId = 'https://registered.example/client.json';
@@ -1011,6 +1033,37 @@ describe('unit/dcr-verifier-bearer-middleware', () => {
       await assert.rejects(verifyBearerToken('any-token', verifyUrl), (error: unknown) => error instanceof Error && !(error instanceof OAuthError));
     } finally {
       outage.close();
+    }
+  });
+
+  it('answers 500 when the verify endpoint never answers, after the verifier bound', async () => {
+    const hung = createServer(() => {
+      // Never answers; the verifier's own bound must end the request.
+    });
+    await new Promise<void>((resolve) => hung.listen(0, '127.0.0.1', resolve));
+    const verifyUrl = `http://127.0.0.1:${(hung.address() as AddressInfo).port}/oauth/verify`;
+    // The bound is a module-internal lever that the package entry does not export; 30 s is not waited out.
+    const original = verifyTimeout.ms;
+    verifyTimeout.ms = 50;
+    try {
+      assert.strictEqual((await challenge(new SourceDcrTokenVerifier(verifyUrl) as never, 'any-token')).status, 500);
+    } finally {
+      verifyTimeout.ms = original;
+      hung.closeAllConnections();
+      hung.close();
+    }
+  });
+
+  it('verifyBearerToken still refuses a verify response without provider tokens', async () => {
+    const bare = createServer((_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ token: 't', clientId: 'c', scopes: [], expiresAt: Date.now() + 1000 }));
+    });
+    await new Promise<void>((resolve) => bare.listen(0, '127.0.0.1', resolve));
+    try {
+      await assert.rejects(verifyBearerToken('t', `http://127.0.0.1:${(bare.address() as AddressInfo).port}/oauth/verify`), /missing required provider tokens/);
+    } finally {
+      bare.close();
     }
   });
 });

@@ -22,6 +22,9 @@ import { startDcrTestServer } from '../lib/servers/dcr-test-server.ts';
 /** keyv 6 getRaw returns `{ value, expires }`; read the absolute expiry from it. */
 const expiryOf = (record: unknown): number | undefined => (typeof record === 'object' && record !== null ? (record as { expires?: number }).expires : undefined);
 
+/** Status for every message; the body only when the response failed, since a success body holds tokens. */
+const failure = (response: Response, body: string): string => (response.ok ? `HTTP ${response.status}` : `HTTP ${response.status}: ${body}`);
+
 interface DcrTokenData {
   clientId: string;
   clientSecret: string;
@@ -70,9 +73,7 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     }
   });
 
-  it('should refresh DCR token and return new access token', async function () {
-    this.timeout(30000);
-
+  it('should refresh DCR token and return new access token', async () => {
     // Load stored tokens from test-setup
     const storedTokens = await loadDcrTokens();
     if (!storedTokens) {
@@ -152,9 +153,10 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
       }).toString(),
     });
 
-    assert.ok(tokenResponse.ok, `Token refresh should succeed, got ${tokenResponse.status}`);
+    const tokenBody = await tokenResponse.text();
+    assert.ok(tokenResponse.ok, `Token refresh should succeed (${failure(tokenResponse, tokenBody)})`);
 
-    const tokenData = (await tokenResponse.json()) as {
+    const tokenData = JSON.parse(tokenBody) as {
       access_token: string;
       token_type: string;
       expires_in: number;
@@ -183,8 +185,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
 
-    assert.ok(verifyResponse.ok, 'New token should be verifiable');
-    const verifyData = (await verifyResponse.json()) as {
+    const verifyBody = await verifyResponse.text();
+    assert.ok(verifyResponse.ok, `New token should be verifiable (${failure(verifyResponse, verifyBody)})`);
+    const verifyData = JSON.parse(verifyBody) as {
       token: string;
       providerTokens: { accessToken: string; refreshToken?: string };
     };
@@ -198,8 +201,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: testClientId, client_secret: testClientSecret }),
     });
-    assert.ok(secondResponse.ok, `A second DCR renewal must succeed (HTTP ${secondResponse.status})`);
-    const secondTokenData = (await secondResponse.json()) as { access_token: string };
+    const secondBody = await secondResponse.text();
+    assert.ok(secondResponse.ok, `A second DCR renewal must succeed (${failure(secondResponse, secondBody)})`);
+    const secondTokenData = JSON.parse(secondBody) as { access_token: string };
     assert.ok(secondTokenData.access_token, 'Second renewal must return a DCR access token');
     const second = await dcrUtils.getRefreshToken(serverStore, refreshToken);
     if (!second?.providerTokens.refreshToken) throw new Error('Second renewal must remain refreshable');
@@ -232,8 +236,9 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     const requestRefreshResponse = await fetch(`${baseUrl}/oauth/verify`, {
       headers: { Authorization: `Bearer ${secondTokenData.access_token}` },
     });
-    assert.ok(requestRefreshResponse.ok, 'Request-time provider refresh must verify the DCR token');
-    const requestRefreshData = (await requestRefreshResponse.json()) as {
+    const requestRefreshBody = await requestRefreshResponse.text();
+    assert.ok(requestRefreshResponse.ok, `Request-time provider refresh must verify the DCR token (${failure(requestRefreshResponse, requestRefreshBody)})`);
+    const requestRefreshData = JSON.parse(requestRefreshBody) as {
       token: string;
       providerTokens: { accessToken: string; refreshToken?: string; expiresAt?: number };
     };
@@ -269,9 +274,8 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
 
     const graphResponse = await fetch('https://graph.microsoft.com/v1.0/me?$select=id', {
       headers: { Authorization: `Bearer ${requestRefreshData.providerTokens.accessToken}` },
-      signal: AbortSignal.timeout(30000),
     });
-    assert.ok(graphResponse.ok, `DCR renewed credentials must authorize Graph /me (HTTP ${graphResponse.status})`);
+    assert.ok(graphResponse.ok, `DCR renewed credentials must authorize Graph /me (HTTP ${graphResponse.status}): ${await graphResponse.text()}`);
     await dcrUtils.setRefreshToken(serverStore, refreshToken, {
       ...requestRenewal,
       providerTokens: { ...requestRenewal.providerTokens, refreshToken: 'invalid-provider-refresh-token' },
@@ -289,9 +293,7 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     console.log('✅ Router refresh test passed!');
   });
 
-  it('should fail refresh with invalid refresh_token', async function () {
-    this.timeout(10000);
-
+  it('should fail refresh with invalid refresh_token', async () => {
     // DCR credentials - completely separate from loopback credentials
     const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;

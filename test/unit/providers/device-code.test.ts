@@ -17,10 +17,13 @@ import { DeviceCodeProvider, type EnrichedExtra, type ToolModule } from '@mcp-z/
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import assert from 'assert';
 import * as fs from 'fs';
+import { createServer } from 'http';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
+import type { AddressInfo } from 'net';
 import * as path from 'path';
 import { createConfig } from '../../lib/config.ts';
+import { redirectFetch } from '../../lib/redirect-fetch.ts';
 import { logger } from '../../lib/test-utils.ts';
 
 const config = createConfig();
@@ -391,5 +394,31 @@ describe('DeviceCodeProvider Middleware - Error Handling', () => {
         return true;
       }
     );
+  });
+});
+
+describe('DeviceCodeProvider - device code deadline', () => {
+  it('ends the poll with an expiry error when the authorization server keeps answering authorization_pending', async () => {
+    // A local server answers the device code request with a short expires_in, then authorization_pending forever.
+    const server = createServer((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url?.endsWith('/devicecode')) {
+        res.end(JSON.stringify({ device_code: 'dc', user_code: 'UC', verification_uri: 'http://127.0.0.1/verify', expires_in: 0.3, interval: 0.05 }));
+        return;
+      }
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'authorization_pending' }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const restoreFetch = redirectFetch('login.microsoftonline.com', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    try {
+      const provider = new DeviceCodeProvider({ service: 'outlook', clientId: 'test-client', tenantId: 'common', scope: 'User.Read', headless: true, logger, tokenStore: new Keyv() });
+      // headless would refuse before the flow starts and a visible run would open a browser, so the flow is entered directly.
+      await assert.rejects((provider as unknown as { startDeviceCodeFlow(accountId: string): Promise<unknown> }).startDeviceCodeFlow('device-code'), /Device code expired/);
+    } finally {
+      restoreFetch();
+      server.closeAllConnections();
+      server.close();
+    }
   });
 });

@@ -7,6 +7,8 @@
 
 import type { ProviderTokens } from '@mcp-z/oauth';
 import { OAuthError, OAuthErrorCode } from '@modelcontextprotocol/server';
+import { fetchWithTimeout } from './fetch-with-timeout.ts';
+import { verifyTimeout } from './verify-timeout.ts';
 
 /**
  * Authentication information from token verification
@@ -54,12 +56,16 @@ export class DcrTokenVerifier {
    */
   async verifyAccessToken(token: string): Promise<AuthInfo> {
     try {
-      const response = await fetch(this.verifyUrl, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await fetchWithTimeout(
+        this.verifyUrl,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+        verifyTimeout.ms
+      );
 
       if (!response.ok) {
         let errorMessage = 'Unknown error';

@@ -179,9 +179,7 @@ describe('DcrOAuthProvider', () => {
 
 // Integration tests with real Microsoft endpoints (require tokens from test-setup)
 describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
-  it('should refresh provider tokens with real Microsoft endpoint', async function () {
-    this.timeout(30000);
-
+  it('should refresh provider tokens with real Microsoft endpoint', async () => {
     // Load stored DCR tokens from test-setup
     const dcrTokenPath = path.join(process.cwd(), '.tokens/dcr.json');
     const dcrStore = new Keyv({
@@ -246,9 +244,7 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
     console.log(`✅ Verified - user email: ${email}`);
   });
 
-  it('should fail refresh with invalid token', async function () {
-    this.timeout(10000);
-
+  it('should fail refresh with invalid token', async () => {
     const clientId = requiredEnv('MS_TEST_DCR_CLIENT_ID');
     const tenantId = process.env.MS_TEST_DCR_TENANT_ID || 'common';
 
@@ -309,6 +305,7 @@ const testTool = {
 // Create minimal HTTP server for verify endpoint
 let testServer: Server | undefined;
 const validBearerToken = 'valid_dcr_token';
+let verifyCalls = 0;
 
 function startTestServer(): Promise<void> {
   const app = express();
@@ -316,6 +313,7 @@ function startTestServer(): Promise<void> {
 
   // Mock /oauth/verify endpoint
   app.get('/oauth/verify', (req, res) => {
+    verifyCalls++;
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -455,6 +453,41 @@ describe('DcrOAuthProvider.authMiddleware()', () => {
 
     assert.ok(result);
     assert.strictEqual((result.structuredContent as { result?: string }).result, 'success');
+  });
+
+  it('uses the provider tokens the bearer gate supplied without a second verify call', async () => {
+    const middleware = provider.authMiddleware();
+    const wrappedTool = middleware.withToolAuth(testTool);
+    const extra = createTestExtra({
+      http: {
+        req: new Request('http://test.local'),
+        // A token the verify endpoint does not know: only the gate's providerTokens can make this succeed.
+        authInfo: { token: 'known-only-to-the-gate', clientId: 'test-client', scopes: [], providerTokens: mockProviderTokens } as { token: string; clientId: string; scopes: string[] },
+      },
+    });
+
+    const before = verifyCalls;
+    const result = await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);
+
+    assert.strictEqual((result.structuredContent as { result?: string }).result, 'success');
+    assert.strictEqual(verifyCalls, before, 'no verify request may be made');
+  });
+
+  it('verifies through the verify endpoint when no gate supplied provider tokens', async () => {
+    const middleware = provider.authMiddleware();
+    const wrappedTool = middleware.withToolAuth(testTool);
+    const extra = createTestExtra({
+      http: { req: new Request('http://test.local', { headers: { authorization: `Bearer ${validBearerToken}` } }) },
+    });
+
+    const before = verifyCalls;
+    await (wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, extra);
+    assert.strictEqual(verifyCalls, before + 1);
+
+    const unknown = createTestExtra({
+      http: { req: new Request('http://test.local', { headers: { authorization: 'Bearer unknown-token' } }) },
+    });
+    await assert.rejects((wrappedTool.handler as (args: unknown, extra: unknown) => Promise<CallToolResult>)({ message: 'test' }, unknown), /Token verification failed/);
   });
 
   it('handles case-insensitive Bearer prefix', async () => {

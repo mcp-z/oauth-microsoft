@@ -106,6 +106,10 @@ import { createDcrRouter } from '@mcp-z/oauth-microsoft';
 const router = createDcrRouter({ ...config, cimdResolver: createCimdResolver({ allowHttpLoopback: true }) });
 ```
 
+#### Registration limits
+
+`/oauth/register` accepts anonymous registrations with no limit, and stored registrations do not expire. An operator exposing a server to the internet limits that endpoint in their reverse proxy. An application that mounts `createDcrRouter` on its own Express app can put its own rate limiter in front of it.
+
 ## Config helpers
 
 Use `parseConfig()` and `parseDcrConfig()` to load CLI + env settings for servers.

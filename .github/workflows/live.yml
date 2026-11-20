@@ -94,9 +94,12 @@ jobs:
           MS_TEST_DCR_TENANT_ID: ${{ secrets.MS_TEST_DCR_TENANT_ID }}
           TEST_INCLUDE_MANUAL: "false"
           HEADLESS: "true"
-      - name: Engines
-        run: npm run test:engines -- --bail
-        env: *live-test-env
+      # 2026-11-20: temporary experiment on Kevin's word, restore by 2026-11-22.
+      # Hypothesis: the Microsoft test accounts are refused because of test volume (this step repeats the live suite on every Node version).
+      # Plan: /Users/kevin/Dev/tools/kevin-skills/.agents/plans/mcp-z/plan.md
+      # - name: Engines
+      #   run: npm run test:engines -- --bail
+      #   env: *live-test-env
       - name: Persist
         if: always() && steps.seed.outcome != 'skipped'
         run: node scripts/ci-tokens.ts persist

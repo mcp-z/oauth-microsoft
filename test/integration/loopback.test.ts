@@ -216,7 +216,9 @@ describe('LoopbackOAuthProvider Integration Tests (Microsoft)', () => {
               Authorization: `Bearer ${await auth.getAccessToken()}`,
             },
           });
-          const data = (await response.json()) as {
+          const body = await response.text();
+          assert.ok(response.ok, `Graph /me must succeed (HTTP ${response.status}): ${body}`);
+          const data = JSON.parse(body) as {
             mail?: string;
             userPrincipalName?: string;
           };

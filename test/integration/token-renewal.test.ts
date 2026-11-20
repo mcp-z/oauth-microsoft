@@ -69,8 +69,8 @@ describe('Microsoft unattended token renewal (live)', () => {
           assert.ok(reopened?.refreshToken === previousRefresh, 'Replacement must survive reopening the file store');
           if (round === 0) await setToken(store, params, { ...refreshed, expiresAt: 1 });
           else {
-            const response = await fetch('https://graph.microsoft.com/v1.0/me?$select=id', { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(30000) });
-            assert.ok(response.ok, `Renewed credential must authorize Graph /me (HTTP ${response.status})`);
+            const response = await fetch('https://graph.microsoft.com/v1.0/me?$select=id', { headers: { Authorization: `Bearer ${accessToken}` } });
+            assert.ok(response.ok, `Renewed credential must authorize Graph /me (HTTP ${response.status}): ${await response.text()}`);
           }
         }
       } finally {

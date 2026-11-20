@@ -13,6 +13,7 @@ import { ProtocolError, ProtocolErrorCode } from '@modelcontextprotocol/server';
 import { createRefreshedToken } from '../lib/create-refreshed-token.ts';
 import { fetchWithTimeout } from '../lib/fetch-with-timeout.ts';
 import { ProviderRefreshError } from '../lib/provider-refresh-error.ts';
+import { DcrTokenVerifier } from '../lib/token-verifier.ts';
 import type { AuthContext, EnrichedExtra, Logger, MicrosoftAuthProvider } from '../types.ts';
 
 /**
@@ -253,29 +254,31 @@ export class DcrOAuthProvider {
           throw new ProtocolError(ProtocolErrorCode.InvalidRequest, 'Missing Authorization header. DCR mode requires bearer token.');
         }
 
-        // Call /oauth/verify to validate DCR token and get provider tokens
-        const verifyResponse = await fetchWithTimeout(this.config.verifyEndpoint, {
-          headers: { Authorization: `Bearer ${bearerToken}` },
-        });
-
-        if (!verifyResponse.ok) {
-          throw new ProtocolError(ProtocolErrorCode.InvalidRequest, `Token verification failed: ${verifyResponse.status}`);
+        // The bearer gate supplies provider tokens; without a gate, verify through the authorization server.
+        const gateTokens = (extra.http?.authInfo as { providerTokens?: ProviderTokens } | undefined)?.providerTokens;
+        let providerTokens: ProviderTokens;
+        if (gateTokens) {
+          providerTokens = gateTokens;
+        } else {
+          try {
+            const verified = await new DcrTokenVerifier(this.config.verifyEndpoint).verifyAccessToken(bearerToken);
+            if (!verified.providerTokens) throw new Error('Verification response missing required provider tokens');
+            providerTokens = verified.providerTokens;
+          } catch (error) {
+            throw new ProtocolError(ProtocolErrorCode.InvalidRequest, error instanceof Error ? error.message : String(error));
+          }
         }
-
-        const verifyData = (await verifyResponse.json()) as {
-          providerTokens: ProviderTokens;
-        };
 
         // Fetch user email to use as accountId (with caching)
         let accountId: string;
         try {
-          accountId = await this.getUserEmail(verifyData.providerTokens);
+          accountId = await this.getUserEmail(providerTokens);
         } catch (error) {
           throw new ProtocolError(ProtocolErrorCode.InternalError, `Failed to get user email for DCR authentication: ${error instanceof Error ? error.message : String(error)}`);
         }
 
         // Create auth provider from provider tokens
-        const auth = this.toAuthProvider(verifyData.providerTokens);
+        const auth = this.toAuthProvider(providerTokens);
 
         // Inject authContext and logger into extra
         (extra as { authContext?: AuthContext }).authContext = {
