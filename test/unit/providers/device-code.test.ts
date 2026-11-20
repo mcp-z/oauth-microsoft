@@ -422,3 +422,40 @@ describe('DeviceCodeProvider - device code deadline', () => {
     }
   });
 });
+
+describe('DeviceCodeProvider - failed browser open', () => {
+  it('logs at info when the browser cannot be opened for the verification URL', async () => {
+    // openUrl refuses a non-http URL before launching anything, so no browser runs.
+    const server = createServer((req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      if (req.url?.endsWith('/devicecode')) {
+        res.end(JSON.stringify({ device_code: 'dc', user_code: 'UC', verification_uri: 'ftp://127.0.0.1/verify', expires_in: 0.3, interval: 0.05 }));
+        return;
+      }
+      res.statusCode = 400;
+      res.end(JSON.stringify({ error: 'authorization_pending' }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const restoreFetch = redirectFetch('login.microsoftonline.com', `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
+    const records: { level: string; message: string }[] = [];
+    const recordingLogger = {
+      debug: (message: string) => records.push({ level: 'debug', message }),
+      info: (message: string) => records.push({ level: 'info', message }),
+      warn: (message: string) => records.push({ level: 'warn', message }),
+      error: (message: string) => records.push({ level: 'error', message }),
+    };
+    try {
+      const provider = new DeviceCodeProvider({ service: 'outlook', clientId: 'test-client', tenantId: 'common', scope: 'User.Read', headless: false, logger: recordingLogger, tokenStore: new Keyv() });
+      await assert.rejects((provider as unknown as { startDeviceCodeFlow(accountId: string): Promise<unknown> }).startDeviceCodeFlow('device-code'), /Device code expired/);
+      const failed = records.filter((r) => r.message === 'Failed to open browser');
+      assert.deepStrictEqual(
+        failed.map((r) => r.level),
+        ['info']
+      );
+    } finally {
+      restoreFetch();
+      server.closeAllConnections();
+      server.close();
+    }
+  });
+});

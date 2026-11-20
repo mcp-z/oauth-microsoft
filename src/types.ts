@@ -69,9 +69,15 @@ export interface OAuthConfig {
  * @public
  */
 export interface DcrConfig {
-  /** DCR mode: self-hosted (runs own OAuth server) or external (uses Auth0/Stitch) */
+  /**
+   * DCR mode: self-hosted (runs own OAuth server) or external (uses Auth0/Stitch)
+   * @deprecated Ignored: no mcp-z server reads this field. Parsing is unchanged.
+   */
   mode: 'self-hosted' | 'external';
-  /** External verification endpoint URL (required for external mode) */
+  /**
+   * External verification endpoint URL (required for external mode)
+   * @deprecated Ignored: no mcp-z server reads this field. Parsing is unchanged.
+   */
   verifyUrl?: string;
   /** DCR client storage URI (required for self-hosted mode) */
   storeUri?: string;

@@ -149,7 +149,7 @@ export class DeviceCodeProvider implements OAuth2TokenStorageProvider {
         await openUrl(urlToOpen);
         logger.debug('Opened browser to verification URL', { url: urlToOpen });
       } catch (error) {
-        logger.debug('Failed to open browser', { error: error instanceof Error ? error.message : String(error) });
+        logger.info('Failed to open browser', { error: error instanceof Error ? error.message : String(error) });
       }
     }
 
