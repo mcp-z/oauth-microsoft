@@ -32,6 +32,7 @@ npm install @mcp-z/oauth-microsoft keyv keyv-file
 ### Redirect URI modes (loopback)
 - No REDIRECT_URI: ephemeral loopback (random port), works for stdio and http.
 - REDIRECT_URI set: persistent callback /oauth/callback (HTTP only).
+  If you mount your own callback route instead of `createLoopbackCallbackRouter`, pass a successful callback to `handleOAuthCallback` and a failed one (the provider's `error`, or no code) to `failOAuthCallback`, so the waiting call fails at once.
 
 ### Loopback OAuth (interactive)
 

@@ -780,6 +780,18 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
   }
 
   /**
+   * Record a failed callback (the provider's `error`, or no code) for a sign-in this process started,
+   * so the waiting call fails at once. Does nothing for a missing or unknown state.
+   * Use it from your own callback route; a successful callback goes to `handleOAuthCallback`.
+   */
+  failOAuthCallback(params: { state?: string; error?: string; errorDescription?: string }): void {
+    const { state, error, errorDescription } = params;
+    if (!state) return;
+    const message = error ? `OAuth error: ${error}${errorDescription ? `: ${errorDescription}` : ''}` : 'No authorization code received';
+    this.failPendingAuth(state, new Error(message));
+  }
+
+  /**
    * Create auth middleware for single-user context (single active account per service)
    *
    * Single-user mode:

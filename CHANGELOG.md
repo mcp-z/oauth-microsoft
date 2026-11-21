@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.5.0] - 2026-11-21
+
+### Added
+
+- `LoopbackOAuthProvider.failOAuthCallback({ state, error, errorDescription })` records a failed callback for a sign-in this process started, so an application with its own callback route can fail the waiting call at once. It does nothing for a missing or unknown state.
+
+### Fixed
+
+- With a configured `redirectUri`, a cancelled consent or a callback without a code now fails the waiting tool call at once with the provider's `error` and `error_description`, instead of timing out after 5 minutes. A callback without a state, or with a state this process did not start, fails nothing and the sign-in keeps waiting.
+
 ## [2.4.5] - 2026-11-20
 
 ### Fixed

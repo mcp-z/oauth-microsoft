@@ -16,13 +16,16 @@ export function createLoopbackCallbackRouter(provider: LoopbackOAuthProvider): e
     const code = typeof req.query.code === 'string' ? req.query.code : undefined;
     const state = typeof req.query.state === 'string' ? req.query.state : undefined;
     const error = typeof req.query.error === 'string' ? req.query.error : undefined;
+    const errorDescription = typeof req.query.error_description === 'string' ? req.query.error_description : undefined;
 
     if (error) {
+      provider.failOAuthCallback({ state, error, errorDescription });
       res.status(400).send(getErrorTemplate(error));
       return;
     }
 
     if (!code) {
+      provider.failOAuthCallback({ state });
       res.status(400).send(getErrorTemplate('No authorization code received'));
       return;
     }

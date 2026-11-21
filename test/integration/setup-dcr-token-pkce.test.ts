@@ -4,15 +4,13 @@ import { generatePKCE } from '@mcp-z/oauth';
 import { createDcrRouter } from '@mcp-z/oauth-microsoft';
 import assert from 'assert';
 import express from 'express';
-import getPort from 'get-port';
 import Keyv from 'keyv';
 import type { Socket } from 'net';
+import { listenOnFreePort } from '../lib/listen-on-free-port.ts';
 import { assertDcrCallbackState, createDcrAuthorizationUrl, createDcrTokenBody } from '../lib/setup-dcr-token.ts';
 
 describe('integration/setup-dcr-token-pkce', () => {
   it('uses PKCE accepted by the real DCR authorize and token endpoints', async () => {
-    const port = await getPort({ host: 'localhost' });
-    const baseUrl = `http://localhost:${port}`;
     const redirectUri = 'http://localhost:51746/callback';
     const clientId = `dcr_${randomUUID()}`;
     const clientSecret = randomUUID();
@@ -25,6 +23,8 @@ describe('integration/setup-dcr-token-pkce', () => {
     });
 
     const app = express();
+    const { server, port } = await listenOnFreePort(app, 'localhost');
+    const baseUrl = `http://localhost:${port}`;
     app.use(
       '/',
       createDcrRouter({
@@ -35,9 +35,6 @@ describe('integration/setup-dcr-token-pkce', () => {
         clientConfig: { clientId: 'dummy-upstream-client', tenantId: 'common' },
       })
     );
-    const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
-      const listening = app.listen(port, 'localhost', () => resolve(listening));
-    });
     const connections = new Set<Socket>();
     server.on('connection', (socket) => {
       connections.add(socket);

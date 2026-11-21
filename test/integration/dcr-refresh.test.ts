@@ -10,7 +10,6 @@ import { dcrUtils } from '@mcp-z/oauth';
 import assert from 'assert';
 import { randomUUID } from 'crypto';
 import { mkdir, unlink } from 'fs/promises';
-import getPort from 'get-port';
 import Keyv from 'keyv';
 import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
@@ -85,17 +84,12 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
     const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
 
-    // Get dynamic port to avoid conflicts (refresh tests don't need fixed URI)
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     await mkdir(path.resolve('.tmp'), { recursive: true });
     serverStorePath = path.resolve('.tmp', `dcr-refresh-${randomUUID()}.json`);
     const persistentStore = new Keyv({ store: new KeyvFile({ filename: serverStorePath }) });
 
     // Start DCR test server
     const serverResult = await startDcrTestServer({
-      port,
-      baseUrl,
       scopes: [MS_SCOPE],
       clientId,
       ...(clientSecret && { clientSecret }),
@@ -103,6 +97,7 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
       store: persistentStore,
     });
     dcrCleanup = serverResult.close;
+    const baseUrl = serverResult.url;
     serverStore = serverResult.store;
     activeServerStore = serverStore;
 
@@ -299,20 +294,15 @@ describe('DCR Router Refresh Tests (Microsoft)', () => {
     const clientSecret = process.env.MS_TEST_DCR_CLIENT_SECRET;
     const tenantId = requiredEnv('MS_TEST_DCR_TENANT_ID');
 
-    // Get dynamic port to avoid conflicts (refresh tests don't need fixed URI)
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
-
     // Start DCR test server
     const serverResult = await startDcrTestServer({
-      port,
-      baseUrl,
       scopes: [MS_SCOPE],
       clientId,
       ...(clientSecret && { clientSecret }),
       tenantId,
     });
     dcrCleanup = serverResult.close;
+    const baseUrl = serverResult.url;
     serverStore = serverResult.store;
     activeServerStore = serverStore;
 
