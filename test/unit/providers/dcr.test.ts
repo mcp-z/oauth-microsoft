@@ -19,6 +19,7 @@ import { KeyvFile } from 'keyv-file';
 import * as path from 'path';
 import { requiredEnv } from 'portable-env';
 import { z } from 'zod';
+import { listenOnFreePort } from '../../lib/listen-on-free-port.ts';
 import { createTestExtra, logger } from '../../lib/test-utils.ts';
 
 describe('DcrOAuthProvider', () => {
@@ -269,9 +270,9 @@ describe('DcrOAuthProvider - Integration with Microsoft APIs', () => {
   });
 });
 
-const TEST_PORT = 9876;
-const BASE_URL = `http://localhost:${TEST_PORT}`;
-const VERIFY_ENDPOINT = `${BASE_URL}/oauth/verify`;
+// Set from the address the test server bound in startTestServer
+let BASE_URL = '';
+let VERIFY_ENDPOINT = '';
 
 // Mock provider tokens for testing
 const mockProviderTokens: ProviderTokens = {
@@ -307,7 +308,7 @@ let testServer: Server | undefined;
 const validBearerToken = 'valid_dcr_token';
 let verifyCalls = 0;
 
-function startTestServer(): Promise<void> {
+async function startTestServer(): Promise<void> {
   const app = express();
   app.use(express.json());
 
@@ -329,11 +330,10 @@ function startTestServer(): Promise<void> {
     return res.status(401).json({ error: 'invalid_token' });
   });
 
-  return new Promise((resolve) => {
-    testServer = app.listen(TEST_PORT, () => {
-      resolve();
-    });
-  });
+  const bound = await listenOnFreePort(app, '127.0.0.1');
+  testServer = bound.server;
+  BASE_URL = `http://127.0.0.1:${bound.port}`;
+  VERIFY_ENDPOINT = `${BASE_URL}/oauth/verify`;
 }
 
 function stopTestServer(): Promise<void> {

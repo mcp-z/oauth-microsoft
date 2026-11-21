@@ -20,9 +20,6 @@ import * as path from 'path';
 import type { Logger } from '../../src/types.ts';
 import { startDcrTestServer } from './servers/dcr-test-server.ts';
 
-const TEST_PORT = 3456;
-const BASE_URL = `http://localhost:${TEST_PORT}`;
-
 interface SetupDcrTokenOptions {
   clientId: string;
   clientSecret?: string;
@@ -80,14 +77,14 @@ export async function setupDcrToken(options: SetupDcrTokenOptions): Promise<void
     // Start DCR test server
     console.log('🔧 Starting temporary DCR server...');
     const serverResult = await startDcrTestServer({
-      port: TEST_PORT,
-      baseUrl: BASE_URL,
       scopes: [scope],
       clientId,
       ...(clientSecret && { clientSecret }),
       ...(tenantId && { tenantId }),
     });
     dcrCleanup = serverResult.close;
+    // The server bound port 0 on 127.0.0.1; every URL below comes from that bound address
+    const BASE_URL = serverResult.url;
     console.log(`✅ DCR server running at ${serverResult.url}`);
 
     // Start callback listener
