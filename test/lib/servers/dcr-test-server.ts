@@ -14,13 +14,14 @@ import Keyv from 'keyv';
 import type { Socket } from 'net';
 import { z } from 'zod';
 import { createDcrRouter, DcrOAuthProvider } from '../../../src/index.ts';
+import { listenOnFreePort } from '../listen-on-free-port.ts';
 
 export interface DcrTestServerConfig {
-  /** Port to run server on */
-  port: number;
+  /** Fixed port to run on; omit to bind an OS-assigned port on 127.0.0.1 (then baseUrl is derived) */
+  port?: number;
 
-  /** Base URL for OAuth endpoints */
-  baseUrl: string;
+  /** Base URL for OAuth endpoints; required with port, derived from the bound port without it */
+  baseUrl?: string;
 
   /** OAuth scopes to support */
   scopes: string[];
@@ -43,13 +44,26 @@ export interface DcrTestServerConfig {
  * Returns URL, store, and close function
  */
 export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{ url: string; store: Keyv; close: () => Promise<void> }> {
-  const { port, baseUrl, scopes, clientId, clientSecret, tenantId } = config;
+  const { scopes, clientId, clientSecret, tenantId } = config;
 
   // Use provided store or create in-memory store (no file persistence)
   const store = config.store || new Keyv();
 
   // Create Express app
   const app = express();
+
+  // Without a fixed port, bind first so the base URL is built from the assigned port
+  let httpServer: Server | undefined;
+  let port = config.port;
+  let baseUrl = config.baseUrl;
+  if (port === undefined) {
+    const bound = await listenOnFreePort(app, '127.0.0.1');
+    httpServer = bound.server;
+    port = bound.port;
+    baseUrl = `http://127.0.0.1:${port}`;
+  }
+  if (baseUrl === undefined || port === undefined) throw new Error('baseUrl is required with port');
+  const serverBaseUrl: string = baseUrl;
 
   // Parse JSON bodies (required for DCR endpoints)
   app.use(express.json());
@@ -178,30 +192,33 @@ export async function startDcrTestServer(config: DcrTestServerConfig): Promise<{
     res.json({ status: 'ok', port, baseUrl, mcp: `${baseUrl}/mcp` });
   });
 
-  // Start HTTP server
-  const httpServer: Server = app.listen(port, () => {
-    console.log(`🔧 DCR Test Server listening on ${baseUrl}`);
-    console.log(`   MCP endpoint: ${baseUrl}/mcp`);
-    console.log(`   DCR endpoints: ${baseUrl}/.well-known/oauth-authorization-server`);
-  });
+  // Start HTTP server (already bound when no fixed port was given)
+  if (!httpServer) {
+    httpServer = app.listen(port, () => {
+      console.log(`🔧 DCR Test Server listening on ${baseUrl}`);
+      console.log(`   MCP endpoint: ${baseUrl}/mcp`);
+      console.log(`   DCR endpoints: ${baseUrl}/.well-known/oauth-authorization-server`);
+    });
+  }
+  const listening: Server = httpServer;
   const connections = new Set<Socket>();
-  httpServer.on('connection', (socket) => {
+  listening.on('connection', (socket) => {
     connections.add(socket);
     socket.once('close', () => connections.delete(socket));
   });
 
   return {
-    url: baseUrl,
+    url: serverBaseUrl,
     store,
     close: async () => {
       const closed = new Promise<void>((resolve, reject) => {
-        httpServer.close((err) => {
+        listening.close((err) => {
           if (err) reject(err);
           else resolve();
         });
       });
-      if (typeof httpServer.closeAllConnections === 'function') {
-        httpServer.closeAllConnections();
+      if (typeof listening.closeAllConnections === 'function') {
+        listening.closeAllConnections();
       } else {
         for (const socket of connections) socket.destroy();
       }
