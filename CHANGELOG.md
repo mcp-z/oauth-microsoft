@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.4.5] - 2026-11-20
+
+### Fixed
+
+- A failed loopback sign-in now fails the waiting tool call at once with the real cause, instead of timing out after 5 minutes with "OAuth flow timed out". Without a configured `redirectUri` this covers a cancelled consent (the provider's `error` and `error_description`), a callback without a code, a callback without a state or with one that is not the sign-in's, a rejected code exchange, and a token store that cannot be written. With a configured `redirectUri` it covers only a rejected code exchange and a store failure; a cancelled consent, a callback without a code, and a callback without a state or with an unknown or mismatched state still wait the full 5 minutes.
+
 ## [2.4.4] - 2026-11-20
 
 ### Fixed

@@ -66,6 +66,11 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
   // Track URLs we've already opened for a given state within this process (prevents tab spam).
   private openedStates = new Set<string>();
 
+  // A failed callback per state, kept in memory because the store may be what failed.
+  private callbackFailures = new Map<string, Error>();
+  private openFlows = new Set<string>();
+  private callbackFailureWakers = new Map<string, () => void>();
+
   constructor(config: LoopbackOAuthConfig) {
     this.config = config;
   }
@@ -127,6 +132,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
       // Store PKCE verifier for callback (5 minute TTL)
       await this.createPendingAuth({ state: stateId, codeVerifier });
+      this.trackFlow(stateId);
 
       // Build auth URL with configured redirect_uri
       const authUrl = this.buildAuthUrl({
@@ -350,8 +356,32 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
     await tokenStore.delete(this.pendingKey(state));
   }
 
+  /** Remember a started sign-in until its 5 minute window ends, so only a known flow can have a failure recorded. */
+  private trackFlow(state: string): void {
+    this.openFlows.add(state);
+    const timer = setTimeout(() => {
+      this.openFlows.delete(state);
+      this.callbackFailures.delete(state);
+    }, OAUTH_TIMEOUT_MS);
+    timer.unref();
+  }
+
+  /** Record why the callback for `state` failed and wake the call waiting on it. */
+  private failPendingAuth(state: string, error: unknown): void {
+    if (!this.openFlows.has(state)) return;
+    this.callbackFailures.set(state, error instanceof Error ? error : new Error(String(error)));
+    this.callbackFailureWakers.get(state)?.();
+  }
+
+  private throwCallbackFailure(state: string): void {
+    const failure = this.callbackFailures.get(state);
+    if (!failure) return;
+    this.callbackFailures.delete(state);
+    throw failure;
+  }
+
   /**
-   * Wait until pending auth is marked completed (or timeout).
+   * Wait until pending auth is marked completed, its callback fails, or the wait times out.
    * Used by middleware after opening auth URL in non-headless mode.
    */
   private async waitForOAuthCompletion(state: string): Promise<{ email?: string }> {
@@ -364,7 +394,15 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       if (pending?.completedAt) {
         return { email: pending.email };
       }
-      await new Promise((r) => setTimeout(r, OAUTH_POLL_MS));
+      this.throwCallbackFailure(state);
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, OAUTH_POLL_MS);
+        this.callbackFailureWakers.set(state, () => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+      this.callbackFailureWakers.delete(state);
     }
 
     throw new Error('OAuth flow timed out after 5 minutes');
@@ -447,7 +485,8 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
         if (error) {
           res.writeHead(400, { 'Content-Type': 'text/html' });
           res.end(getErrorTemplate(error));
-          args.onError(new Error(`OAuth error: ${error}`));
+          const description = url.searchParams.get('error_description');
+          args.onError(new Error(`OAuth error: ${error}${description ? `: ${description}` : ''}`));
           return;
         }
 
@@ -553,6 +592,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
 
     // Store PKCE verifier for callback (5 minute TTL)
     await this.createPendingAuth({ state: stateId, codeVerifier });
+    this.trackFlow(stateId);
 
     let server: http.Server | null = null;
     let serverPort: number;
@@ -568,6 +608,7 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
       },
       onError: (err) => {
         logger.error('Ephemeral OAuth server error', { error: err instanceof Error ? err.message : String(err) });
+        this.failPendingAuth(stateId, err);
         server?.close();
       },
     });
@@ -730,7 +771,12 @@ export class LoopbackOAuthProvider implements OAuth2TokenStorageProvider {
     }
 
     // Shared callback processor (same code path as ephemeral)
-    return await this.processOAuthCallback({ code, state, redirectUri });
+    try {
+      return await this.processOAuthCallback({ code, state, redirectUri });
+    } catch (error) {
+      this.failPendingAuth(state, error);
+      throw error;
+    }
   }
 
   /**

@@ -6,19 +6,19 @@ import { bearerAuthChallengeResponse, OAuthError, requireBearerAuth } from '@mod
 import assert from 'assert';
 import { createHash } from 'crypto';
 import express from 'express';
-import getPort from 'get-port';
 import { createServer, type Server } from 'http';
 import Keyv from 'keyv';
 import type { AddressInfo } from 'net';
 import { DcrTokenVerifier as SourceDcrTokenVerifier } from '../../../src/lib/token-verifier.ts';
 import { verifyTimeout } from '../../../src/lib/verify-timeout.ts';
+import { listenOnFreePort } from '../../lib/listen-on-free-port.ts';
 import { redirectFetch } from '../../lib/redirect-fetch.ts';
 
 describe('unit/dcr-router-auth-challenge', () => {
   it('responds with WWW-Authenticate on missing bearer token', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
 
     const dcrRouter = createDcrRouter({
       store: new Keyv(),
@@ -29,8 +29,6 @@ describe('unit/dcr-router-auth-challenge', () => {
     });
 
     app.use('/', dcrRouter);
-
-    const server = app.listen(port);
     try {
       const response = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
@@ -56,9 +54,9 @@ describe('unit/dcr-router-protected-resource-metadata', () => {
   // that one audience-binds its token (RFC 8707) to the wrong identifier, and an
   // authorization server that validates the indicator rejects it.
   it('names the MCP endpoint identically at the root and sub-path locations', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
 
     app.use(
       '/',
@@ -70,8 +68,6 @@ describe('unit/dcr-router-protected-resource-metadata', () => {
         clientConfig: { clientId: 'test-client-id' },
       })
     );
-
-    const server = app.listen(port);
     try {
       const read = async (path: string) => (await (await fetch(`${baseUrl}${path}`)).json()) as { resource?: string };
       const root = await read('/.well-known/oauth-protected-resource');
@@ -88,9 +84,9 @@ describe('unit/dcr-router-protected-resource-metadata', () => {
 
 describe('unit/dcr-router-scope-fallback', () => {
   it('uses server scopesSupported when client omits scope parameter', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
 
     const serverScopes = ['openid', 'https://graph.microsoft.com/Mail.Read'];
@@ -113,8 +109,6 @@ describe('unit/dcr-router-scope-fallback', () => {
       redirect_uris: [redirectUri],
       client_name: 'Test Client',
     });
-
-    const server = app.listen(port);
     try {
       // Make authorization request WITHOUT scope parameter (like codex does)
       const authUrl = new URL(`${baseUrl}/oauth/authorize`);
@@ -145,9 +139,9 @@ describe('unit/dcr-router-scope-fallback', () => {
   });
 
   it('preserves client-provided scope when present', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
 
     const serverScopes = ['openid', 'https://graph.microsoft.com/Mail.Read'];
@@ -171,8 +165,6 @@ describe('unit/dcr-router-scope-fallback', () => {
       redirect_uris: [redirectUri],
       client_name: 'Test Client',
     });
-
-    const server = app.listen(port);
     try {
       // Make authorization request WITH scope parameter
       const authUrl = new URL(`${baseUrl}/oauth/authorize`);
@@ -204,9 +196,9 @@ describe('unit/dcr-router-scope-fallback', () => {
 
 describe('unit/dcr-router-pkce-s256-only', () => {
   const setup = async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
 
     const dcrRouter = createDcrRouter({
@@ -228,7 +220,7 @@ describe('unit/dcr-router-pkce-s256-only', () => {
       client_name: 'PKCE Test Client',
     });
 
-    return { baseUrl, store, clientId, clientSecret, redirectUri, server: app.listen(port) };
+    return { baseUrl, store, clientId, clientSecret, redirectUri, server };
   };
 
   const authorizeUrl = (baseUrl: string, clientId: string, redirectUri: string, method?: string) => {
@@ -334,9 +326,9 @@ describe('unit/dcr-router-pkce-s256-only', () => {
 
 describe('unit/dcr-router-pkce-required', () => {
   const setup = async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
 
     const dcrRouter = createDcrRouter({
@@ -358,7 +350,7 @@ describe('unit/dcr-router-pkce-required', () => {
       client_name: 'PKCE Required Test Client',
     });
 
-    return { baseUrl, store, clientId, clientSecret, redirectUri, server: app.listen(port) };
+    return { baseUrl, store, clientId, clientSecret, redirectUri, server };
   };
 
   const s256 = (verifier: string) => createHash('sha256').update(verifier).digest('base64url');
@@ -526,9 +518,9 @@ describe('unit/dcr-router-pkce-required', () => {
 
 describe('unit/dcr-router-iss', () => {
   const setup = async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
 
     // An issuer distinct from baseUrl: iss must echo the advertised issuer, not the
@@ -552,7 +544,7 @@ describe('unit/dcr-router-iss', () => {
       client_name: 'Iss Test Client',
     });
 
-    return { baseUrl, issuerUrl, store, clientId, redirectUri, server: app.listen(port) };
+    return { baseUrl, issuerUrl, store, clientId, redirectUri, server };
   };
 
   it('advertises authorization_response_iss_parameter_supported in authorization server metadata', async () => {
@@ -570,19 +562,14 @@ describe('unit/dcr-router-iss', () => {
   it('carries iss on the authorization response redirect', async () => {
     const { baseUrl, issuerUrl, store, clientId, redirectUri, server } = await setup();
     try {
-      // The callback handler exchanges the provider code before it redirects, so the
-      // provider token endpoint is stubbed to keep this a local test with no provider call.
-      const realFetch = globalThis.fetch;
-      globalThis.fetch = (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]): Promise<Response> => {
-        const url = input instanceof URL ? input.toString() : typeof input === 'string' ? input : input.url;
-        if (url === 'https://login.microsoftonline.com/common/oauth2/v2.0/token') {
-          return new Response(JSON.stringify({ access_token: 'ms-access-token', refresh_token: 'ms-refresh-token', expires_in: 3600, scope: 'openid' }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        return realFetch(input, init);
-      }) as typeof fetch;
+      // The callback handler exchanges the provider code before it redirects, so the provider
+      // token endpoint is a controlled local server answering RFC 6749 section 5.1.
+      const providerServer = createServer((_req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ access_token: 'ms-access-token', refresh_token: 'ms-refresh-token', expires_in: 3600, scope: 'openid' }));
+      });
+      await new Promise<void>((resolve) => providerServer.listen(0, '127.0.0.1', resolve));
+      const restoreFetch = redirectFetch('login.microsoftonline.com', `http://127.0.0.1:${(providerServer.address() as AddressInfo).port}`);
 
       try {
         const clientState = 'client-state';
@@ -608,7 +595,8 @@ describe('unit/dcr-router-iss', () => {
         assert.strictEqual(redirect.searchParams.get('iss'), issuerUrl, 'iss must be the issuer the metadata advertises, not baseUrl');
         assert.strictEqual(redirect.searchParams.get('state'), clientState);
       } finally {
-        globalThis.fetch = realFetch;
+        restoreFetch();
+        providerServer.close();
       }
     } finally {
       server.close();
@@ -618,9 +606,9 @@ describe('unit/dcr-router-iss', () => {
 
 describe('unit/dcr-router-cimd', () => {
   const setup = async (cimdResolver = createCimdResolver()) => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     const store = new Keyv();
     app.use(
       '/',
@@ -633,7 +621,7 @@ describe('unit/dcr-router-cimd', () => {
         cimdResolver,
       })
     );
-    return { baseUrl, store, server: app.listen(port) };
+    return { baseUrl, store, server };
   };
 
   const authorizeUrl = (baseUrl: string, clientId: string, redirectUri: string) => {
@@ -663,12 +651,11 @@ describe('unit/dcr-router-cimd', () => {
   });
 
   it('resolves a CIMD client and validates its exact redirect URI', async () => {
-    const documentPort = await getPort({ host: '127.0.0.1' });
     const documentApp = express();
+    const { server: documentServer, port: documentPort } = await listenOnFreePort(documentApp, '127.0.0.1');
     const redirectUri = 'http://localhost:9999/callback';
     const clientId = `http://127.0.0.1:${documentPort}/client.json`;
     documentApp.get('/client.json', (_req, res) => res.json({ client_id: clientId, client_name: 'Local CIMD client', redirect_uris: [redirectUri] }));
-    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
     const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
     try {
       const response = await fetch(authorizeUrl(baseUrl, clientId, redirectUri), { redirect: 'manual' });
@@ -685,11 +672,10 @@ describe('unit/dcr-router-cimd', () => {
   });
 
   it('matches a registered loopback redirect on any port and refuses other path, host or scheme', async () => {
-    const documentPort = await getPort({ host: '127.0.0.1' });
     const documentApp = express();
+    const { server: documentServer, port: documentPort } = await listenOnFreePort(documentApp, '127.0.0.1');
     const clientId = `http://127.0.0.1:${documentPort}/client.json`;
     documentApp.get('/client.json', (_req, res) => res.json({ client_id: clientId, client_name: 'Local CIMD client', redirect_uris: ['http://127.0.0.1/callback'] }));
-    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
     const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
     try {
       const accepted = await fetch(authorizeUrl(baseUrl, clientId, 'http://127.0.0.1:54321/callback'), { redirect: 'manual' });
@@ -731,10 +717,9 @@ describe('unit/dcr-router-cimd', () => {
 
   it('returns a generic invalid_client for CIMD resolution failures', async () => {
     const leaked = 'internal-hostname.example: secret-token';
-    const documentPort = await getPort({ host: '127.0.0.1' });
     const documentApp = express();
+    const { server: documentServer, port: documentPort } = await listenOnFreePort(documentApp, '127.0.0.1');
     documentApp.get('/client.json', (_req, res) => res.status(502).send(leaked));
-    const documentServer = documentApp.listen(documentPort, '127.0.0.1');
     const clientId = `http://127.0.0.1:${documentPort}/client.json`;
     const { baseUrl, server } = await setup(createCimdResolver({ allowHttpLoopback: true }));
     try {
@@ -843,11 +828,11 @@ describe('unit/dcr-router-cimd', () => {
 
 describe('unit/dcr-router-register-status', () => {
   const start = async (store: Keyv) => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     app.use('/', createDcrRouter({ store, issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id' } }));
-    return { baseUrl, server: app.listen(port) };
+    return { baseUrl, server };
   };
   const register = (baseUrl: string, body: unknown) => fetch(`${baseUrl}/oauth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
@@ -893,11 +878,10 @@ describe('unit/dcr-router-register-status', () => {
 
 describe('unit/dcr-router-no-client-listing', () => {
   it('answers 404 on GET /debug/clients after a client is registered', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     app.use('/', createDcrRouter({ store: new Keyv(), issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id' } }));
-    const server = app.listen(port);
     try {
       const registered = await fetch(`${baseUrl}/oauth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ redirect_uris: ['http://localhost/cb'] }) });
       assert.strictEqual(registered.status, 201);
@@ -932,11 +916,10 @@ describe('unit/dcr-router-revoked-refresh-token', () => {
 
   const setup = async () => {
     const store = new Keyv();
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     app.use('/', createDcrRouter({ store, issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id', tenantId: 'common' } }));
-    const server = app.listen(port);
     const client = await dcrUtils.registerClient(store, { redirect_uris: ['http://localhost/cb'], token_endpoint_auth_method: 'client_secret_post' });
     await dcrUtils.setRefreshToken(store, 'refresh-1', {
       access_token: 'access-1',
@@ -1000,11 +983,10 @@ describe('unit/dcr-verifier-bearer-middleware', () => {
   };
 
   it('answers 401 with an invalid_token challenge for an unknown token verified against the real router', async () => {
-    const port = await getPort();
-    const baseUrl = `http://localhost:${port}`;
     const app = express();
+    const { server, port } = await listenOnFreePort(app, '127.0.0.1');
+    const baseUrl = `http://127.0.0.1:${port}`;
     app.use('/', createDcrRouter({ store: new Keyv(), issuerUrl: baseUrl, baseUrl, scopesSupported: ['read'], clientConfig: { clientId: 'test-client-id', tenantId: 'common' } }));
-    const server = app.listen(port);
     try {
       const response = await challenge(new DcrTokenVerifier(`${baseUrl}/oauth/verify`) as never, 'unknown-token');
       assert.strictEqual(response.status, 401);
